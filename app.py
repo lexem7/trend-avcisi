@@ -9,8 +9,8 @@ from datetime import datetime
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="Çin Trend Avcısı Pro",
-    page_icon="🎯",
+    page_title="Fark Yaratan Ürün Avcısı",
+    page_icon="💎",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -22,41 +22,18 @@ if 'search_offset' not in st.session_state:
     st.session_state.search_offset = 0
 if 'current_query' not in st.session_state:
     st.session_state.current_query = ""
-if 'favorites' not in st.session_state:
-    st.session_state.favorites = []
 
-# --- FALLBACK UNSPLASH GÖRSELLERİ ---
+# --- FALLBACK GÖRSELLERİ ---
 FALLBACK_IMAGES = [
-    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400&h=300&fit=crop",  # Toys
-    "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&h=300&fit=crop",  # Colorful toys
-    "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=400&h=300&fit=crop",  # Kids toys
-    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400&h=300&fit=crop",  # Plush
-    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=400&h=300&fit=crop",  # Figure
-    "https://images.unsplash.com/photo-1608889825103-eb5ed706fc64?w=400&h=300&fit=crop",  # Mystery box style
-    "https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400&h=300&fit=crop",  # Toy car
-    "https://images.unsplash.com/photo-1594787318286-3d835c1d207f?w=400&h=300&fit=crop",  # Puzzle toy
+    "https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1608889825103-eb5ed706fc64?w=400&h=300&fit=crop",
+    "https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400&h=300&fit=crop",
 ]
 
-# --- VERİ KAYDETME ---
-FAVORITES_FILE = "favorites.json"
-
-def load_favorites():
-    try:
-        if os.path.exists(FAVORITES_FILE):
-            with open(FAVORITES_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return []
-
-def save_favorites_to_file(favorites):
-    try:
-        with open(FAVORITES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(favorites, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-# --- TASARIM (DARK MODE PRO) ---
+# --- TASARIM ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -67,12 +44,12 @@ st.markdown("""
     }
 
     .header-pro {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 50%, #4facfe 100%);
         padding: 40px;
         border-radius: 24px;
         margin-bottom: 30px;
         text-align: center;
-        box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 20px 60px rgba(240, 147, 251, 0.3);
     }
 
     .product-card-pro {
@@ -87,12 +64,12 @@ st.markdown("""
     }
     .product-card-pro:hover {
         transform: translateY(-10px) scale(1.02);
-        box-shadow: 0 25px 80px rgba(102, 126, 234, 0.4);
-        border-color: rgba(102, 126, 234, 0.5);
+        box-shadow: 0 25px 80px rgba(240, 147, 251, 0.4);
+        border-color: rgba(240, 147, 251, 0.5);
     }
     .product-card-pro img {
         width: 100%;
-        height: 220px;
+        height: 240px;
         object-fit: cover;
         border-bottom: 1px solid rgba(255,255,255,0.1);
     }
@@ -100,16 +77,15 @@ st.markdown("""
         padding: 20px;
     }
     .card-title {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         color: #fff;
         margin-bottom: 12px;
-        height: 42px;
+        height: 38px;
         overflow: hidden;
         line-height: 1.4;
     }
 
-    /* Platform Butonları */
     .platform-buttons {
         display: flex;
         flex-wrap: wrap;
@@ -123,7 +99,7 @@ st.markdown("""
         border-radius: 8px;
         text-decoration: none;
         font-weight: 600;
-        font-size: 11px;
+        font-size: 10px;
         transition: all 0.3s;
     }
     .platform-btn:hover {
@@ -131,7 +107,6 @@ st.markdown("""
         filter: brightness(1.2);
     }
 
-    /* Platform Renkleri */
     .xiaohongshu-btn { background: linear-gradient(135deg, #ff2442, #ff6b6b); color: white; }
     .douyin-btn { background: linear-gradient(135deg, #00f2ea, #ff0050); color: white; }
     .taobao-btn { background: linear-gradient(135deg, #ff5000, #ff8533); color: white; }
@@ -139,25 +114,24 @@ st.markdown("""
     .alibaba-btn { background: linear-gradient(135deg, #ff6a00, #ee0a24); color: white; }
     .google-btn { background: linear-gradient(135deg, #4285f4, #34a853); color: white; }
 
-    .source-badge {
-        background: rgba(0, 212, 255, 0.2);
-        color: #00d4ff;
-        padding: 4px 10px;
+    .category-badge {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        color: white;
+        padding: 5px 12px;
         border-radius: 20px;
         font-size: 10px;
-        font-weight: 600;
-        display: inline-block;
-    }
-
-    .category-badge {
-        background: linear-gradient(90deg, #f093fb, #f5576c);
-        color: white;
-        padding: 5px 14px;
-        border-radius: 20px;
-        font-size: 11px;
         font-weight: 700;
         display: inline-block;
         margin-bottom: 10px;
+    }
+
+    .unique-badge {
+        background: linear-gradient(90deg, #f5576c, #f093fb);
+        color: white;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 9px;
+        font-weight: 700;
     }
 
     .stats-card {
@@ -166,49 +140,27 @@ st.markdown("""
         border-radius: 16px;
         padding: 25px;
         text-align: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     }
     .stats-number {
-        font-size: 2.5em;
+        font-size: 2.2em;
         font-weight: 700;
-        background: linear-gradient(135deg, #667eea, #f093fb);
+        background: linear-gradient(135deg, #f093fb, #f5576c);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin: 0;
     }
     .stats-label {
         color: #888;
-        font-size: 14px;
+        font-size: 13px;
         margin-top: 5px;
     }
 
-    .load-more-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 18px 50px;
-        border: none;
-        border-radius: 30px;
-        font-size: 18px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.3s;
-        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
-    }
-    .load-more-btn:hover {
-        transform: scale(1.05);
-        box-shadow: 0 15px 50px rgba(102, 126, 234, 0.6);
-    }
-
     .search-info {
-        background: rgba(102, 126, 234, 0.1);
-        border: 1px solid rgba(102, 126, 234, 0.3);
+        background: rgba(240, 147, 251, 0.1);
+        border: 1px solid rgba(240, 147, 251, 0.3);
         border-radius: 12px;
         padding: 15px 20px;
         margin: 20px 0;
-    }
-    .search-info-text {
-        color: #a0a0ff;
-        font-size: 13px;
     }
 
     .divider {
@@ -217,136 +169,210 @@ st.markdown("""
         margin: 30px 0;
     }
 
-    .fallback-badge {
-        background: rgba(255, 193, 7, 0.2);
-        color: #ffc107;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 9px;
-        margin-left: 5px;
+    .tip-box {
+        background: rgba(79, 172, 254, 0.1);
+        border: 1px solid rgba(79, 172, 254, 0.3);
+        border-radius: 12px;
+        padding: 15px;
+        margin: 15px 0;
+        font-size: 12px;
+        color: #4facfe;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SMART NOVELTY KATEGORİLERİ ---
+# --- FARK YARATAN ÜRÜN KATEGORİLERİ ---
+# Sıradan değil, SUNUMU/MEKANİZMASI farklı olan ürünler
 
-SMART_CATEGORIES = {
-    "🔧 Mekanik Sürpriz (Mechanical)": {
+UNIQUE_CATEGORIES = {
+    "🎰 Mini Gashapon Makinesi": {
+        "description": "Masaüstü kapsül makineleri, çevirmeli oyuncak dağıtıcılar",
         "keywords_en": [
-            "mechanical blind box", "wind up toy mechanism", "clockwork toy",
-            "gear mechanism toy", "mechanical movement figure", "kinetic blind box",
-            "self moving toy", "mechanical surprise toy", "motor driven toy"
+            "mini gashapon machine toy", "desktop capsule machine", "candy vending machine toy",
+            "mini vending machine dispenser", "gachapon machine home", "capsule toy dispenser",
+            "twist candy machine", "egg vending machine toy", "mini slot machine toy",
+            "tabletop gashapon", "home capsule vending", "kids vending machine toy"
         ],
         "keywords_cn": [
-            "机械盲盒", "发条玩具", "齿轮玩具", "机械结构玩具",
-            "自动玩具", "机械惊喜", "动力玩具", "机械手办"
+            "迷你扭蛋机", "桌面扭蛋机", "糖果机玩具", "家用扭蛋机",
+            "儿童投币机", "迷你售货机", "扭蛋机摆件", "自动售货机玩具",
+            "桌上扭蛋机", "小型扭蛋机", "抓糖机", "迷你抓娃娃机"
         ]
     },
 
-    "🌀 Fizik & Yerçekimi (Gravity/Physics)": {
+    "🎁 Mekanik Açılış Kutusu": {
+        "description": "Düğmeye bas açılan, otomatik çıkan sürpriz kutular",
         "keywords_en": [
-            "gravity defying toy", "physics toy", "balancing toy figure",
-            "levitating display", "magnetic levitation toy", "pendulum toy",
-            "kinetic sculpture toy", "perpetual motion toy", "gyroscope toy"
+            "mechanical surprise box", "pop up gift box", "auto opening box",
+            "spring loaded surprise", "mechanical unboxing", "push button surprise box",
+            "self opening gift box", "mechanical reveal box", "ejecting surprise toy",
+            "automatic pop out box", "button activated surprise"
         ],
         "keywords_cn": [
-            "重力玩具", "物理玩具", "平衡玩具", "磁悬浮玩具",
-            "陀螺玩具", "动能雕塑", "永动玩具", "科学玩具"
+            "机械惊喜盒", "弹出礼盒", "自动开盒", "弹簧惊喜盒",
+            "按键惊喜盒", "机关盒子", "自动弹出盒", "创意开盒",
+            "惊喜弹射盒", "机械礼物盒"
         ]
     },
 
-    "🦋 Dönüşüm Sürprizi (Transformation)": {
+    "🎡 Çevirmeli/Dönen Oyuncak": {
+        "description": "Çark çevir, rulet, dönen mekanizmalı oyuncaklar",
         "keywords_en": [
-            "transformation toy", "morphing figure", "shape shifting toy",
-            "deformation blind box", "converting toy", "transformer style toy",
-            "changeable figure", "multi form toy", "metamorphosis toy"
+            "spinning wheel toy", "roulette toy", "wheel of fortune toy",
+            "spin to win toy", "rotating surprise toy", "turntable toy game",
+            "lucky wheel toy", "spinning game toy", "dial turn toy",
+            "rotation mechanism toy", "spinning lottery toy"
         ],
         "keywords_cn": [
-            "变形玩具", "变形盲盒", "变形金刚", "可变形手办",
-            "形态转换玩具", "多形态玩具", "变身玩具"
+            "转盘玩具", "轮盘玩具", "幸运转盘", "旋转惊喜",
+            "抽奖转盘", "旋转玩具", "大转盘玩具", "转转乐",
+            "幸运轮盘", "旋转抽奖机"
         ]
     },
 
-    "🎰 Yaratıcı Gashapon (Creative Gashapon)": {
+    "🎪 Pençeli Otomat / Mini Vinç": {
+        "description": "Masaüstü mini vinç makineleri, pençeli oyuncak",
         "keywords_en": [
-            "creative gashapon", "unique capsule toy", "designer gashapon",
-            "art toy gashapon", "collectible capsule", "premium gashapon",
-            "limited gashapon", "special edition capsule", "innovative vending toy"
+            "mini claw machine", "desktop crane game", "candy grabber machine",
+            "mini arcade claw", "toy grabber machine", "small claw game",
+            "usb claw machine", "tabletop crane toy", "mini grabber arcade",
+            "home claw machine", "personal crane game"
         ],
         "keywords_cn": [
-            "创意扭蛋", "设计师扭蛋", "艺术扭蛋", "限定扭蛋",
-            "高端扭蛋", "特别版扭蛋", "收藏扭蛋", "精品扭蛋"
+            "迷你抓娃娃机", "桌面夹娃娃机", "小型抓糖机", "家用抓娃娃",
+            "USB夹娃娃机", "迷你夹公仔机", "儿童抓娃娃机", "桌上抓娃娃",
+            "迷你娃娃机", "夹糖果机"
         ]
     },
 
-    "🌊 Reçine Sanat Diorama": {
+    "🎲 Sürpriz Zar/Kart Dağıtıcı": {
+        "description": "Otomatik kart çıkaran, zar atan mekanizmalar",
         "keywords_en": [
-            "resin diorama cube", "epoxy ocean art", "resin whale lamp",
-            "underwater scene resin", "titanic resin art", "deep sea diorama",
-            "resin jellyfish lamp", "ocean cube art", "3d resin scene"
+            "card dispenser toy", "automatic dice roller", "card ejector machine",
+            "random card picker", "dice tower toy", "card shuffler dispenser",
+            "mystery card machine", "trading card dispenser", "dice rolling machine",
+            "card vending toy", "automatic card dealer toy"
         ],
         "keywords_cn": [
-            "树脂立方体", "海洋树脂", "环氧树脂艺术", "水晶胶摆件",
-            "深海场景", "树脂夜灯", "海洋立方体", "树脂工艺品"
+            "卡片分发器", "自动骰子机", "卡牌机", "抽卡机",
+            "骰子塔", "卡片抽取器", "盲卡机", "集换卡分发器",
+            "自动发牌机", "桌游配件"
         ]
     },
 
-    "🎭 Sürreal & Sanat Oyuncak": {
+    "💡 Işıklı/LED Sürpriz": {
+        "description": "Işık efektli, LED'li açılış deneyimi",
         "keywords_en": [
-            "designer toy", "art figure", "surreal toy", "abstract figure",
-            "artist collaboration toy", "gallery toy", "museum figure",
-            "conceptual toy", "avant garde figure"
+            "LED surprise box", "light up mystery box", "glowing blind box",
+            "LED unboxing toy", "light effect surprise", "illuminated gift box",
+            "neon surprise toy", "glow in dark blind box", "LED reveal toy",
+            "light show surprise", "luminous mystery toy"
         ],
         "keywords_cn": [
-            "设计师玩具", "艺术手办", "潮流玩具", "抽象手办",
-            "艺术家联名", "概念玩具", "收藏艺术品", "限量艺术玩具"
+            "发光盲盒", "LED惊喜盒", "灯光盲盒", "夜光盲盒",
+            "发光礼盒", "LED揭示盒", "荧光盲盒", "闪光惊喜",
+            "发光玩具盒", "灯效盲盒"
         ]
     },
 
-    "📱 Akıllı Telefon Aksesuarı": {
+    "🎵 Sesli/Müzikli Sürpriz": {
+        "description": "Müzik çalan, ses efektli açılış kutuları",
         "keywords_en": [
-            "phone hippers figure", "screen attachment toy", "phone holder figure",
-            "cable bite figure", "phone decoration toy", "magnetic phone toy",
-            "phone stand figure", "cute phone accessory"
+            "musical surprise box", "sound effect toy box", "singing gift box",
+            "melody surprise toy", "audio blind box", "music box surprise",
+            "sound activated toy", "talking surprise box", "musical unboxing",
+            "sound chip gift box"
         ],
         "keywords_cn": [
-            "手机支架玩具", "屏幕挂件", "数据线保护套", "手机装饰",
-            "磁吸手机架", "创意手机配件", "可爱手机挂件"
+            "音乐盲盒", "发声惊喜盒", "音乐礼盒", "有声玩具盒",
+            "音效盲盒", "唱歌礼盒", "发声玩具", "音乐机关盒",
+            "语音盲盒", "声控惊喜"
         ]
     },
 
-    "🎪 İnteraktif & Sürpriz": {
+    "🌊 Sıvı/Akan Diorama": {
+        "description": "İçinde sıvı akan, kar küresi tarzı ürünler",
         "keywords_en": [
-            "interactive blind box", "surprise reveal toy", "unboxing experience",
-            "mystery reveal figure", "hidden feature toy", "secret compartment toy",
-            "puzzle blind box", "discovery toy"
+            "liquid timer toy", "flowing sand art", "oil hourglass toy",
+            "bubble motion toy", "liquid motion toy", "water snake toy",
+            "dripping oil toy", "liquid filled desk toy", "mesmerizing liquid toy",
+            "calming sensory bottle", "floating glitter toy"
         ],
         "keywords_cn": [
-            "互动盲盒", "惊喜揭示", "隐藏款玩具", "解密玩具",
-            "秘密隔层", "探索玩具", "谜题盲盒", "发现玩具"
+            "液体沙漏", "流沙摆件", "油滴玩具", "液体计时器",
+            "水流玩具", "解压液体", "流动摆件", "油水分离玩具",
+            "漂浮玩具", "减压水蛇"
+        ]
+    },
+
+    "🧲 Manyetik Sürpriz": {
+        "description": "Mıknatıs ile hareket eden, manyetik mekanizmalı",
+        "keywords_en": [
+            "magnetic levitation toy", "floating display", "magnetic sculpture",
+            "magnetic desk toy", "levitating figure", "magnetic kinetic toy",
+            "ferrofluid display", "magnetic fidget toy", "hovering toy display",
+            "magnetic surprise toy", "anti gravity display"
+        ],
+        "keywords_cn": [
+            "磁悬浮玩具", "磁力摆件", "悬浮展示", "磁性玩具",
+            "磁力雕塑", "磁流体", "悬浮手办", "磁力减压",
+            "反重力摆件", "磁吸玩具"
+        ]
+    },
+
+    "🎭 Değişen/Dönüşen Figür": {
+        "description": "Yüzü değişen, formu dönüşen figürler",
+        "keywords_en": [
+            "face changing figure", "morphing toy", "expression changing toy",
+            "transforming display", "mood changing figure", "reversible plush",
+            "flip face toy", "emotion changing toy", "shapeshifting figure",
+            "two face figure", "rotating face display"
+        ],
+        "keywords_cn": [
+            "变脸玩具", "表情变化", "翻转玩偶", "变形手办",
+            "心情变化玩具", "双面玩偶", "可变表情", "变身玩具",
+            "旋转换脸", "情绪玩具"
+        ]
+    },
+
+    "📦 Çok Katmanlı Kutu": {
+        "description": "Açtıkça açılan, iç içe sürpriz kutular",
+        "keywords_en": [
+            "nested surprise box", "multi layer gift box", "box in box surprise",
+            "unfolding gift box", "layered mystery box", "expanding surprise box",
+            "matryoshka style gift", "progressive unboxing", "endless box toy",
+            "stacking surprise box"
+        ],
+        "keywords_cn": [
+            "多层惊喜盒", "套娃礼盒", "层层惊喜", "展开礼盒",
+            "嵌套盲盒", "递进惊喜", "俄罗斯套娃礼盒", "无限盒子",
+            "叠叠乐礼盒", "多重惊喜盒"
+        ]
+    },
+
+    "🎯 Hedef/Atış Oyuncak": {
+        "description": "Vur-kazan tarzı, hedef odaklı sürpriz",
+        "keywords_en": [
+            "target shooting toy", "prize shooting game", "knock down toy",
+            "aim and win toy", "shooting gallery toy", "carnival target game",
+            "ball shooting prize", "dart prize game", "mini shooting arcade",
+            "hit target surprise"
+        ],
+        "keywords_cn": [
+            "射击玩具", "打靶玩具", "投球玩具", "瞄准游戏",
+            "击倒玩具", "嘉年华射击", "飞镖奖品", "迷你射击机",
+            "命中惊喜", "弹射玩具"
         ]
     }
 }
 
-# Viral / Trend Anahtar Kelimeleri
-VIRAL_TERMS = [
-    "viral 2024", "tiktok trending", "xiaohongshu viral", "douyin hot",
-    "best seller", "new release", "limited edition", "must have",
-    "aesthetic desk", "collector item"
-]
-
-VIRAL_TERMS_CN = [
-    "爆款", "网红", "抖音同款", "小红书推荐", "热门",
-    "新品", "限定", "必入", "潮流", "收藏级"
-]
+# Trend/Viral Terimleri
+VIRAL_TERMS_EN = ["viral", "trending", "hot sale", "best seller", "new 2024", "unique", "creative", "novelty"]
+VIRAL_TERMS_CN = ["爆款", "网红", "热卖", "新款", "创意", "独特", "新奇"]
 
 
-# --- ÇİN PLATFORMLARI İÇİN DERİN ARAMA LİNKLERİ ---
-
-def generate_chinese_search_links(query_en, query_cn):
-    """Çin platformları için derin arama linkleri oluştur"""
-
-    # Çince sorgu için URL encode
+# --- ÇİN PLATFORMLARI LİNKLERİ ---
+def generate_platform_links(query_en, query_cn):
     cn_encoded = urllib.parse.quote(query_cn)
     en_encoded = urllib.parse.quote(query_en)
 
@@ -391,25 +417,20 @@ def generate_chinese_search_links(query_en, query_cn):
 
 
 # --- ARAMA FONKSİYONLARI ---
+def create_search_query(category, add_viral=True):
+    cat_data = UNIQUE_CATEGORIES[category]
 
-def generate_search_query(category, include_viral=True):
-    """Akıllı arama sorgusu oluştur"""
-    cat_data = SMART_CATEGORIES[category]
-
-    # İngilizce ve Çince sorgu
     en_query = random.choice(cat_data["keywords_en"])
     cn_query = random.choice(cat_data["keywords_cn"])
 
-    # Viral terim ekle
-    if include_viral and random.random() > 0.3:
-        en_query += " " + random.choice(VIRAL_TERMS)
+    if add_viral and random.random() > 0.4:
+        en_query += " " + random.choice(VIRAL_TERMS_EN)
         cn_query += " " + random.choice(VIRAL_TERMS_CN)
 
     return en_query, cn_query
 
 
-def search_products_safe(query, max_results=8):
-    """Güvenli ürün arama - hata yönetimi ile"""
+def search_images_safe(query, max_results=8):
     results = []
 
     try:
@@ -419,7 +440,6 @@ def search_products_safe(query, max_results=8):
             for img in images:
                 image_url = img.get("image", "")
 
-                # Görsel URL kontrolü
                 if not image_url or len(image_url) < 10:
                     image_url = random.choice(FALLBACK_IMAGES)
                     is_fallback = True
@@ -427,7 +447,7 @@ def search_products_safe(query, max_results=8):
                     is_fallback = False
 
                 results.append({
-                    "title": img.get("title", "Ürün Başlığı Yok"),
+                    "title": img.get("title", "Ürün"),
                     "image_url": image_url,
                     "source_url": img.get("url", "#"),
                     "source": img.get("source", "Web"),
@@ -435,11 +455,10 @@ def search_products_safe(query, max_results=8):
                 })
 
     except Exception as e:
-        # Hata durumunda fallback ürünler oluştur
-        st.warning(f"⚠️ Arama hatası, yedek görseller kullanılıyor...")
+        st.warning(f"⚠️ Arama hatası, alternatif görseller kullanılıyor...")
         for i in range(3):
             results.append({
-                "title": f"Keşfedilecek Ürün #{i+1}",
+                "title": f"Keşfedilecek Ürün",
                 "image_url": random.choice(FALLBACK_IMAGES),
                 "source_url": "#",
                 "source": "Öneri",
@@ -449,70 +468,63 @@ def search_products_safe(query, max_results=8):
     return results
 
 
-def load_more_products(category, include_viral=True, count=6):
-    """Daha fazla ürün yükle"""
-    en_query, cn_query = generate_search_query(category, include_viral)
+def fetch_products(category, add_viral=True, count=6):
+    en_query, cn_query = create_search_query(category, add_viral)
 
-    # Farklı sonuçlar için sorguya random ek
-    variation = random.choice(["new", "hot", "best", "unique", "special", "rare"])
-    modified_query = f"{en_query} {variation}"
+    # Çeşitlilik için rastgele ek kelime
+    extras = ["mini", "desktop", "home", "kids", "cute", "new", "toy"]
+    modified_query = f"{en_query} {random.choice(extras)}"
 
-    new_products = search_products_safe(modified_query, max_results=count)
+    products = search_images_safe(modified_query, max_results=count)
 
-    # Her ürüne kategori ve sorgu bilgisi ekle
-    for product in new_products:
+    for product in products:
         product['category'] = category
         product['query_en'] = en_query
         product['query_cn'] = cn_query
-        product['links'] = generate_chinese_search_links(en_query, cn_query)
+        product['links'] = generate_platform_links(en_query, cn_query)
+        product['description'] = UNIQUE_CATEGORIES[category]['description']
 
-    return new_products
+    return products
 
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("## 🎯 Arama Ayarları")
+    st.markdown("## 💎 Ürün Filtresi")
 
-    # Kategori seçimi
     selected_category = st.selectbox(
-        "📦 Kategori Seç",
-        options=list(SMART_CATEGORIES.keys()),
-        index=0,
-        help="Hangi tür akıllı oyuncakları arıyorsun?"
+        "🎯 Kategori Seç",
+        options=list(UNIQUE_CATEGORIES.keys()),
+        index=0
     )
 
-    # Viral filtresi
-    include_viral = st.checkbox("🔥 Viral/Trend Terimleri Ekle", value=True)
+    # Kategori açıklaması
+    st.markdown(f"""
+    <div class="tip-box">
+        💡 {UNIQUE_CATEGORIES[selected_category]['description']}
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Sonuç sayısı
-    results_count = st.slider("📊 Yüklenecek Ürün Sayısı", 4, 12, 6)
+    add_viral = st.checkbox("🔥 Viral Terimler Ekle", value=True)
+
+    product_count = st.slider("📊 Ürün Sayısı", 4, 12, 6)
 
     st.markdown("---")
 
-    # Yeni arama butonu
-    if st.button("🔄 Yeni Arama Başlat", use_container_width=True):
+    if st.button("🗑️ Listeyi Temizle", use_container_width=True):
         st.session_state.products = []
-        st.session_state.search_offset = 0
-        st.session_state.current_query = selected_category
+        st.session_state.current_query = ""
 
     st.markdown("---")
 
-    # Platform bilgisi
-    st.markdown("### 🌏 Desteklenen Platformlar")
+    st.markdown("### 🌏 Platform Linkleri")
     st.markdown("""
-    - 📕 **Xiaohongshu** (小红书)
-    - 🎵 **Douyin** (抖音)
-    - 🛒 **Taobao** (淘宝)
-    - 🏭 **1688** (Toptan)
-    - 🌐 **Alibaba**
-    - 🔍 **Google Images**
+    Her üründe:
+    - 📕 Xiaohongshu (小红书)
+    - 🎵 Douyin (抖音)
+    - 🛒 Taobao (淘宝)
+    - 🏭 1688 (Toptan)
+    - 🌐 Alibaba
     """)
-
-    st.markdown("---")
-
-    # Favoriler
-    favorites = load_favorites()
-    st.markdown(f"### ⭐ Favoriler: {len(favorites)}")
 
 
 # --- ANA SAYFA ---
@@ -520,9 +532,12 @@ with st.sidebar:
 # Header
 st.markdown("""
 <div class="header-pro">
-    <h1 style="margin:0; font-size:2.8em; font-weight:700;">🎯 ÇİN TREND AVCISI PRO</h1>
-    <p style="margin:15px 0 0 0; font-size:1.3em; opacity:0.95;">
-        Xiaohongshu • Douyin • 1688 • Taobao | Akıllı Oyuncak Keşfi
+    <h1 style="margin:0; font-size:2.5em; font-weight:700;">💎 FARK YARATAN ÜRÜN AVCISI</h1>
+    <p style="margin:15px 0 0 0; font-size:1.2em; opacity:0.95;">
+        Sıradan değil, MEKANİZMASI FARKLI oyuncakları bul!
+    </p>
+    <p style="margin:10px 0 0 0; font-size:0.95em; opacity:0.8;">
+        Mini Gashapon • Pençeli Otomat • Çevirmeli Kutu • LED Sürpriz
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -533,17 +548,17 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown(f"""
     <div class="stats-card">
-        <p class="stats-number">{len(SMART_CATEGORIES)}</p>
-        <p class="stats-label">Akıllı Kategori</p>
+        <p class="stats-number">{len(UNIQUE_CATEGORIES)}</p>
+        <p class="stats-label">Farklı Kategori</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
-    total_kw = sum(len(c["keywords_en"]) + len(c["keywords_cn"]) for c in SMART_CATEGORIES.values())
+    total_kw = sum(len(c["keywords_en"]) + len(c["keywords_cn"]) for c in UNIQUE_CATEGORIES.values())
     st.markdown(f"""
     <div class="stats-card">
         <p class="stats-number">{total_kw}</p>
-        <p class="stats-label">Anahtar Kelime</p>
+        <p class="stats-label">Özel Anahtar Kelime</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -551,38 +566,37 @@ with col3:
     st.markdown(f"""
     <div class="stats-card">
         <p class="stats-number">{len(st.session_state.products)}</p>
-        <p class="stats-label">Yüklenen Ürün</p>
+        <p class="stats-label">Bulunan Ürün</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col4:
-    st.markdown(f"""
+    st.markdown("""
     <div class="stats-card">
         <p class="stats-number">6</p>
-        <p class="stats-label">Platform</p>
+        <p class="stats-label">Çin Platformu</p>
     </div>
     """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- ANA ARAMA BUTONU ---
+# --- ANA ARAMA ---
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    if st.button("🚀 TREND AVLA!", type="primary", use_container_width=True, key="main_search"):
-        with st.spinner("🔍 Çin pazarları taranıyor..."):
-            time.sleep(0.5)
-            new_products = load_more_products(selected_category, include_viral, results_count)
+    if st.button("🚀 FARKLI ÜRÜN BUL!", type="primary", use_container_width=True, key="main_search"):
+        with st.spinner("🔍 Fark yaratan ürünler aranıyor..."):
+            time.sleep(0.3)
+            new_products = fetch_products(selected_category, add_viral, product_count)
             st.session_state.products.extend(new_products)
             st.session_state.current_query = selected_category
 
-# --- ÜRÜN KARTLARI ---
+# --- ÜRÜN GÖSTER ---
 if st.session_state.products:
 
-    # Arama bilgisi
     st.markdown(f"""
     <div class="search-info">
-        <span class="search-info-text">
-            🔍 <strong>{st.session_state.current_query}</strong> kategorisinde
+        <span style="color:#f093fb; font-size:14px;">
+            🎯 <strong>{st.session_state.current_query}</strong> &nbsp;|&nbsp;
             <strong>{len(st.session_state.products)}</strong> ürün bulundu
         </span>
     </div>
@@ -590,15 +604,13 @@ if st.session_state.products:
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    # Ürün grid
+    # Grid
     cols = st.columns(3)
 
     for idx, product in enumerate(st.session_state.products):
         with cols[idx % 3]:
             links = product.get('links', {})
-            fallback_badge = '<span class="fallback-badge">Temsili</span>' if product.get('is_fallback') else ''
 
-            # Platform butonları HTML
             platform_html = ""
             for key, link_data in links.items():
                 platform_html += f'''
@@ -607,16 +619,20 @@ if st.session_state.products:
                     </a>
                 '''
 
+            fallback_note = '<span class="unique-badge">📷 Temsili</span>' if product.get('is_fallback') else ''
+
             st.markdown(f"""
             <div class="product-card-pro">
                 <img src="{product['image_url']}"
                      onerror="this.src='{random.choice(FALLBACK_IMAGES)}'"
-                     alt="{product['title'][:30]}">
+                     alt="Ürün">
                 <div class="card-content">
-                    <span class="category-badge">{product.get('category', 'Trend')[:20]}</span>
-                    <p class="card-title">{product['title'][:60]}...</p>
-                    <span class="source-badge">{product.get('source', 'Web')[:15]}{fallback_badge}</span>
-
+                    <span class="category-badge">{product.get('category', '')[:25]}</span>
+                    <p class="card-title">{product['title'][:55]}...</p>
+                    <p style="font-size:10px; color:#888; margin:5px 0;">
+                        {product.get('description', '')[:40]}...
+                    </p>
+                    {fallback_note}
                     <div class="platform-buttons">
                         {platform_html}
                     </div>
@@ -624,27 +640,30 @@ if st.session_state.products:
             </div>
             """, unsafe_allow_html=True)
 
-    # --- DAHA FAZLA YÜKLE BUTONU ---
+    # DAHA FAZLA YÜKLE
     st.markdown("<br><br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🔄 DAHA FAZLA ÜRÜN GETİR", use_container_width=True, key="load_more"):
+        if st.button("🔄 DAHA FAZLA GETİR", use_container_width=True, key="load_more"):
             with st.spinner("📦 Yeni ürünler yükleniyor..."):
-                time.sleep(0.5)
-                new_products = load_more_products(selected_category, include_viral, results_count)
+                time.sleep(0.3)
+                new_products = fetch_products(selected_category, add_viral, product_count)
                 st.session_state.products.extend(new_products)
                 st.rerun()
 
 else:
-    # Boş durum
     st.markdown("""
-    <div style="text-align:center; padding:60px; color:#666;">
-        <h2>🎯 Trend Avına Başla!</h2>
-        <p>Yukarıdaki butona tıklayarak Çin pazarlarını taramaya başla.</p>
-        <p style="font-size:14px; margin-top:20px;">
-            Xiaohongshu, Douyin, 1688, Taobao platformlarına özel derin arama linkleri ile
-            <br>en ilginç ve viral oyuncakları keşfet!
+    <div style="text-align:center; padding:60px; color:#888;">
+        <h2 style="color:#f093fb;">💎 Fark Yaratan Ürün Ara!</h2>
+        <p>Sıradan blind box değil, <strong>mekanizması farklı</strong> ürünleri keşfet.</p>
+        <br>
+        <p style="font-size:14px;">
+            🎰 Mini Gashapon Makinesi<br>
+            🎪 Masaüstü Pençeli Otomat<br>
+            🎡 Çevirmeli Çark Oyuncaklar<br>
+            💡 LED/Işıklı Sürpriz Kutular<br>
+            🧲 Manyetik Levitasyon
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -654,12 +673,9 @@ else:
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div style="text-align:center; color:#555; padding:30px;">
-    <p style="font-size:16px; font-weight:600;">🎯 Çin Trend Avcısı Pro v3.0</p>
+    <p style="font-size:16px; font-weight:600;">💎 Fark Yaratan Ürün Avcısı v4.0</p>
     <p style="font-size:12px; margin-top:10px;">
-        📕 Xiaohongshu • 🎵 Douyin • 🛒 Taobao • 🏭 1688 • 🌐 Alibaba
-    </p>
-    <p style="font-size:11px; color:#444; margin-top:15px;">
-        Akıllı Oyuncak Keşfi | Mekanik • Fizik • Dönüşüm • Gashapon
+        Sıradan değil, SUNUMU FARKLI ürünler!
     </p>
 </div>
 """, unsafe_allow_html=True)
