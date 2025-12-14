@@ -299,29 +299,74 @@ def smart_search(category, use_learning=True):
 
     return final_query, random.choice(cat_data["chinese"])
 
-def search_products(query, max_results=8):
-    """DuckDuckGo ile ürün ara"""
+def search_products(query, max_results=8, max_retries=3):
+    """DuckDuckGo ile ürün ara - retry logic ile"""
     results = []
+    last_error = None
 
-    try:
-        with DDGS() as ddgs:
-            images = list(ddgs.images(query, max_results=max_results + 5))
+    for attempt in range(max_retries):
+        try:
+            # Her denemede küçük bir gecikme
+            if attempt > 0:
+                delay = 2 ** attempt  # Exponential backoff: 2, 4, 8 saniye
+                time.sleep(delay)
 
-            # Rastgele seç
-            if len(images) > max_results:
-                images = random.sample(images, max_results)
+            # DDGS instance'ı timeout ile oluştur
+            ddgs = DDGS(timeout=20)
 
-            for img in images:
-                results.append({
-                    "id": hash(img.get("image", ""))  % 100000,
-                    "title": img.get("title", ""),
-                    "image": img.get("image", ""),
-                    "url": img.get("url", ""),
-                    "source": img.get("source", ""),
-                    "query": query
-                })
-    except Exception as e:
-        st.warning(f"Arama hatası: {str(e)[:50]}")
+            # Arama yap
+            images = list(ddgs.images(
+                query,
+                max_results=max_results + 5,
+                safesearch='off'
+            ))
+
+            # Başarılı - sonuçları işle
+            if images:
+                # Rastgele seç
+                if len(images) > max_results:
+                    images = random.sample(images, max_results)
+
+                for img in images:
+                    image_url = img.get("image", "")
+                    if image_url:  # Sadece geçerli görselleri ekle
+                        results.append({
+                            "id": hash(image_url) % 100000,
+                            "title": img.get("title", "Ürün"),
+                            "image": image_url,
+                            "url": img.get("url", ""),
+                            "source": img.get("source", ""),
+                            "query": query
+                        })
+
+                if results:
+                    return results  # Başarılı, sonuçları döndür
+
+            # Sonuç yoksa farklı sorgu dene
+            if not results and attempt < max_retries - 1:
+                # Sorguyu basitleştir
+                query_words = query.split()
+                if len(query_words) > 2:
+                    query = ' '.join(query_words[:3])
+                continue
+
+        except Exception as e:
+            last_error = str(e)
+            # Rate limiting veya bağlantı hatası durumunda bekle ve tekrar dene
+            if attempt < max_retries - 1:
+                continue
+
+    # Tüm denemeler başarısız oldu
+    if last_error:
+        error_msg = last_error[:100] if len(last_error) > 100 else last_error
+        if "ratelimit" in last_error.lower():
+            st.warning("⏳ Çok fazla arama yapıldı. Lütfen 30 saniye bekleyin.")
+        elif "timeout" in last_error.lower():
+            st.warning("⌛ Bağlantı zaman aşımına uğradı. Tekrar deneyin.")
+        else:
+            st.warning(f"⚠️ Arama hatası: {error_msg}")
+    else:
+        st.info("🔍 Bu arama için sonuç bulunamadı. Farklı kategori deneyin.")
 
     return results
 
@@ -583,11 +628,15 @@ if st.session_state.products:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 DAHA FAZLA ÜRÜN GETİR", use_container_width=True):
         with st.spinner("Yeni ürünler aranıyor..."):
+            # Önceki aramadan beri biraz bekle
+            time.sleep(1)
             query_en, query_cn = smart_search(selected_category, use_learning)
             new_results = search_products(query_en, max_results=6)
-            for r in new_results:
-                r['category'] = selected_category
-            st.session_state.products.extend(new_results)
+            if new_results:
+                for r in new_results:
+                    r['category'] = selected_category
+                st.session_state.products.extend(new_results)
+                st.success(f"✅ {len(new_results)} yeni ürün eklendi!")
             st.rerun()
 
 else:
@@ -624,7 +673,8 @@ with st.expander("❤️ Beğendiğin Ürünleri Gör"):
 st.markdown("---")
 st.markdown("""
 <div style="text-align:center; color:#555; padding:20px;">
-    <p>🧠 Akıllı Ürün Avcısı v6.0</p>
+    <p>🧠 Akıllı Ürün Avcısı v6.1</p>
     <p style="font-size:12px;">Beğendikçe öğrenen, sana özel ürün bulan sistem</p>
+    <p style="font-size:10px; color:#444;">Gelişmiş hata yönetimi ve retry sistemi ile</p>
 </div>
 """, unsafe_allow_html=True)
