@@ -3,561 +3,628 @@ from duckduckgo_search import DDGS
 import random
 import time
 import urllib.parse
-import hashlib
+import json
+import os
 from datetime import datetime
+from collections import Counter
+import re
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="Çin Niş Ürün Bulucu",
-    page_icon="🔮",
+    page_title="Akıllı Ürün Avcısı",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# --- VERİTABANI DOSYALARI ---
+LIKES_FILE = "liked_products.json"
+DISLIKES_FILE = "disliked_products.json"
+LEARNED_KEYWORDS_FILE = "learned_keywords.json"
+SEARCH_HISTORY_FILE = "search_history.json"
+
 # --- SESSION STATE ---
 if 'products' not in st.session_state:
     st.session_state.products = []
-if 'used_queries' not in st.session_state:
-    st.session_state.used_queries = set()
 if 'search_count' not in st.session_state:
     st.session_state.search_count = 0
+if 'learned_terms' not in st.session_state:
+    st.session_state.learned_terms = []
 
-# --- TASARIM ---
-st.markdown("""
-<style>
-    .stApp { background: #0d0d0d; }
+# --- VERİTABANI FONKSİYONLARI ---
+def load_json(filename):
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except:
+        pass
+    return []
 
-    .main-header {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 2px solid #0f3460;
-        padding: 30px;
-        border-radius: 20px;
-        margin-bottom: 25px;
-        text-align: center;
+def save_json(filename, data):
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+def load_learned_keywords():
+    data = load_json(LEARNED_KEYWORDS_FILE)
+    if isinstance(data, dict):
+        return data
+    return {"positive": {}, "negative": {}, "patterns": []}
+
+def save_learned_keywords(data):
+    save_json(LEARNED_KEYWORDS_FILE, data)
+
+# --- BEĞENİ SİSTEMİ ---
+def like_product(product):
+    """Ürünü beğen ve öğren"""
+    likes = load_json(LIKES_FILE)
+
+    # Ürünü kaydet
+    product['liked_at'] = datetime.now().isoformat()
+    likes.append(product)
+    save_json(LIKES_FILE, likes)
+
+    # Anahtar kelimeleri öğren
+    learn_from_product(product, positive=True)
+
+    return len(likes)
+
+def dislike_product(product):
+    """Ürünü beğenme ve öğren"""
+    dislikes = load_json(DISLIKES_FILE)
+
+    product['disliked_at'] = datetime.now().isoformat()
+    dislikes.append(product)
+    save_json(DISLIKES_FILE, dislikes)
+
+    # Negatif öğrenme
+    learn_from_product(product, positive=False)
+
+    return len(dislikes)
+
+def learn_from_product(product, positive=True):
+    """Üründen anahtar kelimeler öğren"""
+    keywords = load_learned_keywords()
+
+    # Başlıktan kelimeler çıkar
+    title = product.get('title', '').lower()
+
+    # Önemli kelimeleri çıkar (2+ karakter, sayı değil)
+    words = re.findall(r'\b[a-zA-Z\u4e00-\u9fff]{2,}\b', title)
+
+    # Stop words (filtrelenecek)
+    stop_words = {'the', 'and', 'for', 'with', 'new', 'hot', 'sale', 'free', 'shipping',
+                  'pcs', 'set', 'buy', 'get', 'off', 'best', 'top', 'good', 'great',
+                  'item', 'product', 'quality', 'high', 'low', 'price', 'cheap'}
+
+    target = "positive" if positive else "negative"
+
+    for word in words:
+        if word.lower() not in stop_words and len(word) > 2:
+            if word not in keywords[target]:
+                keywords[target][word] = 0
+            keywords[target][word] += 1
+
+    # Kategori pattern'i kaydet
+    if product.get('category') and positive:
+        if product['category'] not in keywords['patterns']:
+            keywords['patterns'].append(product['category'])
+
+    save_learned_keywords(keywords)
+
+def get_smart_search_terms():
+    """Öğrenilen tercihlerden akıllı arama terimleri üret"""
+    keywords = load_learned_keywords()
+
+    # En çok beğenilen kelimeler
+    positive = keywords.get('positive', {})
+    negative = keywords.get('negative', {})
+
+    # Pozitif - Negatif skor hesapla
+    scores = {}
+    for word, count in positive.items():
+        scores[word] = count
+    for word, count in negative.items():
+        if word in scores:
+            scores[word] -= count * 2  # Negatif daha ağır
+        else:
+            scores[word] = -count * 2
+
+    # En yüksek skorlu kelimeleri al
+    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top_words = [w for w, s in sorted_words[:10] if s > 0]
+
+    return top_words
+
+def get_preference_stats():
+    """Tercih istatistiklerini getir"""
+    likes = load_json(LIKES_FILE)
+    dislikes = load_json(DISLIKES_FILE)
+    keywords = load_learned_keywords()
+
+    top_positive = sorted(keywords.get('positive', {}).items(), key=lambda x: x[1], reverse=True)[:5]
+    top_negative = sorted(keywords.get('negative', {}).items(), key=lambda x: x[1], reverse=True)[:5]
+
+    return {
+        'total_likes': len(likes),
+        'total_dislikes': len(dislikes),
+        'top_positive': top_positive,
+        'top_negative': top_negative,
+        'patterns': keywords.get('patterns', [])[:5]
     }
 
-    .platform-card {
-        background: linear-gradient(145deg, #1a1a2e, #0f3460);
-        border: 1px solid #e94560;
-        border-radius: 16px;
-        padding: 20px;
-        margin: 10px 0;
-        text-align: center;
-    }
-
-    .platform-link {
-        display: block;
-        padding: 15px 20px;
-        margin: 8px 0;
-        border-radius: 12px;
-        text-decoration: none;
-        font-weight: 700;
-        font-size: 14px;
-        transition: all 0.3s;
-        text-align: left;
-    }
-    .platform-link:hover {
-        transform: translateX(10px);
-        filter: brightness(1.2);
-    }
-
-    .xhs { background: linear-gradient(90deg, #ff2442, #ff6b6b); color: white; }
-    .douyin { background: linear-gradient(90deg, #00f2ea, #ff0050); color: white; }
-    .taobao { background: linear-gradient(90deg, #ff5000, #ff8533); color: white; }
-    .ali1688 { background: linear-gradient(90deg, #ff6600, #ffaa00); color: white; }
-    .alibaba { background: linear-gradient(90deg, #e94560, #ff6b6b); color: white; }
-
-    .keyword-tag {
-        display: inline-block;
-        background: #e94560;
-        color: white;
-        padding: 8px 15px;
-        border-radius: 20px;
-        margin: 5px;
-        font-size: 13px;
-        font-weight: 600;
-    }
-
-    .chinese-keyword {
-        display: inline-block;
-        background: #0f3460;
-        border: 1px solid #e94560;
-        color: #00d4ff;
-        padding: 8px 15px;
-        border-radius: 20px;
-        margin: 5px;
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .tip-card {
-        background: rgba(233, 69, 96, 0.1);
-        border: 1px solid #e94560;
-        border-radius: 12px;
-        padding: 20px;
-        margin: 20px 0;
-    }
-
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 20px;
-    }
-
-    .product-item {
-        background: #1a1a2e;
-        border: 1px solid #0f3460;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-    .product-item img {
-        width: 100%;
-        height: 180px;
-        object-fit: cover;
-    }
-    .product-item .info {
-        padding: 15px;
-    }
-
-    .copy-btn {
-        background: #e94560;
-        color: white;
-        border: none;
-        padding: 8px 15px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- NİŞ ÜRÜN VERİTABANI ---
-# Gerçekten FARKLI olan ürünler - lisanslı değil, mekanizması özel
-
-NICHE_PRODUCTS = {
-    "🎰 Masaüstü Gashapon/Otomat": {
-        "search_terms": [
-            # Çok spesifik İngilizce
-            "mini gashapon machine desktop", "capsule vending machine toy kids",
-            "candy dispenser machine home", "gumball machine toy small",
-            "twist egg machine toy", "desktop slot machine toy",
-            "coin operated toy machine mini", "prize vending machine small"
+# --- ARAMA KATEGORİLERİ ---
+SEARCH_CATEGORIES = {
+    "🎰 Mini Otomat/Gashapon": {
+        "base_terms": [
+            "mini gashapon machine", "capsule vending machine toy",
+            "desktop candy machine", "mini claw machine",
+            "gachapon dispenser", "egg machine toy"
         ],
-        "chinese_terms": [
-            "迷你扭蛋机 桌面", "糖果机 儿童 家用", "扭蛋机 投币 小型",
-            "自动售货机 玩具 迷你", "抓糖机 桌上", "扭蛋机 可爱"
-        ],
-        "1688_search": "迷你扭蛋机",
-        "taobao_search": "桌面扭蛋机 儿童"
+        "chinese": ["迷你扭蛋机", "桌面糖果机", "抓娃娃机"],
+        "tags": ["gashapon", "vending", "machine", "capsule", "dispenser"]
     },
 
-    "🏗️ Reçine/Epoksi Diorama Küp": {
-        "search_terms": [
-            "resin diorama cube ocean", "epoxy resin whale lamp",
-            "resin titanic diorama", "underwater scene resin cube",
-            "deep sea resin art", "ocean world resin lamp",
-            "resin jellyfish night light", "3d resin ocean cube"
+    "🌊 Reçine/Epoksi Sanat": {
+        "base_terms": [
+            "resin diorama cube", "epoxy ocean art",
+            "resin whale lamp", "underwater resin",
+            "titanic resin", "deep sea diorama"
         ],
-        "chinese_terms": [
-            "树脂立方体 海洋", "环氧树脂 鲸鱼灯", "水晶胶 摆件 海洋",
-            "树脂 泰坦尼克", "深海 树脂 夜灯", "海洋 水晶球"
-        ],
-        "1688_search": "树脂摆件 海洋 创意",
-        "taobao_search": "树脂立方体 海洋场景"
+        "chinese": ["树脂摆件", "海洋水晶", "环氧树脂"],
+        "tags": ["resin", "epoxy", "diorama", "ocean", "cube", "lamp"]
     },
 
-    "🎪 Mini Pençeli Makine": {
-        "search_terms": [
-            "mini claw machine usb", "desktop crane game toy",
-            "small claw grabber machine", "candy claw machine mini",
-            "personal arcade claw game", "tabletop grabber machine"
+    "🎭 Karakter Figür (Stitch/Disney/Sanrio)": {
+        "base_terms": [
+            "stitch blind box", "disney mystery figure",
+            "sanrio surprise", "kuromi gashapon",
+            "hello kitty mystery", "cinnamoroll figure"
         ],
-        "chinese_terms": [
-            "迷你抓娃娃机 USB", "桌面夹娃娃机", "小型抓糖机",
-            "家用抓娃娃机", "儿童夹公仔机"
-        ],
-        "1688_search": "迷你抓娃娃机 桌面",
-        "taobao_search": "迷你抓娃娃机 儿童"
+        "chinese": ["迪士尼盲盒", "三丽鸥扭蛋", "史迪仔手办"],
+        "tags": ["stitch", "disney", "sanrio", "kuromi", "hello kitty", "blind box"]
     },
 
-    "📱 Telefon Ekran Figürü": {
-        "search_terms": [
-            "phone screen figure hippers", "phone decoration figure cute",
-            "phone holder figure kawaii", "screen attachment toy figure",
-            "phone dust plug figure", "cable bite protector cute"
+    "📱 Telefon Aksesuarı Figür": {
+        "base_terms": [
+            "phone hippers figure", "screen decoration toy",
+            "cable bite protector", "phone holder figure",
+            "phone charm cute", "dust plug figure"
         ],
-        "chinese_terms": [
-            "手机屏幕 挂件 可爱", "手机支架 摆件 创意",
-            "数据线保护套 卡通", "手机装饰 小人"
-        ],
-        "1688_search": "手机屏幕挂件 创意",
-        "taobao_search": "手机装饰 可爱摆件"
+        "chinese": ["手机挂件", "屏幕摆件", "数据线保护"],
+        "tags": ["phone", "hippers", "screen", "cable", "holder"]
     },
 
-    "🧲 Manyetik Levitasyon": {
-        "search_terms": [
-            "magnetic levitation display", "floating globe lamp",
-            "magnetic floating plant pot", "levitating moon lamp",
-            "anti gravity display stand", "magnetic floating speaker"
+    "🧲 Manyetik/Levitasyon": {
+        "base_terms": [
+            "magnetic levitation display", "floating globe",
+            "levitating moon lamp", "magnetic desk toy",
+            "anti gravity display", "floating plant pot"
         ],
-        "chinese_terms": [
-            "磁悬浮 摆件", "悬浮地球仪", "磁悬浮 月球灯",
-            "磁悬浮 花盆", "反重力 展示架"
-        ],
-        "1688_search": "磁悬浮摆件 创意",
-        "taobao_search": "磁悬浮 装饰品"
+        "chinese": ["磁悬浮", "悬浮地球仪", "磁力摆件"],
+        "tags": ["magnetic", "levitation", "floating", "anti gravity"]
     },
 
-    "🌊 Sıvı Hareket Oyuncak": {
-        "search_terms": [
-            "liquid motion timer", "oil hourglass toy",
-            "liquid bubble toy desk", "water snake fidget",
-            "floating color mix toy", "sensory liquid toy"
+    "💡 LED/Işıklı Oyuncak": {
+        "base_terms": [
+            "LED blind box", "glow surprise toy",
+            "light up figure", "neon desk toy",
+            "luminous mystery box", "glowing decoration"
         ],
-        "chinese_terms": [
-            "液体沙漏 创意", "油滴 计时器", "解压 液体玩具",
-            "水蛇 减压", "流沙 摆件"
-        ],
-        "1688_search": "液体沙漏 解压玩具",
-        "taobao_search": "液体计时器 创意"
+        "chinese": ["发光盲盒", "LED玩具", "夜光摆件"],
+        "tags": ["led", "glow", "light", "neon", "luminous"]
     },
 
-    "🎡 Mekanik Çark/Rulet": {
-        "search_terms": [
-            "spinning wheel game toy", "roulette wheel toy kids",
-            "fortune wheel toy small", "prize wheel spinner toy",
-            "lucky draw wheel mini", "spinning decision maker"
+    "🎪 Arcade/Eğlence Makinesi": {
+        "base_terms": [
+            "mini arcade machine", "desktop pinball",
+            "mini basketball game", "finger game toy",
+            "retro game console mini", "tabletop arcade"
         ],
-        "chinese_terms": [
-            "转盘 玩具 抽奖", "轮盘 游戏 儿童", "幸运转盘 小型",
-            "旋转 抽奖机", "大转盘 桌面"
-        ],
-        "1688_search": "抽奖转盘 玩具",
-        "taobao_search": "幸运转盘 儿童"
+        "chinese": ["迷你游戏机", "桌面弹珠", "复古街机"],
+        "tags": ["arcade", "game", "pinball", "retro", "mini"]
     },
 
-    "💡 LED Sürpriz Kutu": {
-        "search_terms": [
-            "led light gift box", "glow surprise box",
-            "light up mystery box", "neon gift box toy",
-            "illuminated blind box", "LED unboxing toy"
+    "🌀 Kinetik/Hareket Oyuncak": {
+        "base_terms": [
+            "kinetic desk toy", "perpetual motion toy",
+            "newton cradle", "spinning top metal",
+            "gyroscope toy", "fidget kinetic"
         ],
-        "chinese_terms": [
-            "发光 礼盒 创意", "LED 惊喜盒", "夜光 盲盒",
-            "发光 玩具盒", "灯光 礼物盒"
-        ],
-        "1688_search": "发光礼盒 创意",
-        "taobao_search": "LED惊喜盒 发光"
+        "chinese": ["永动机摆件", "动能玩具", "陀螺仪"],
+        "tags": ["kinetic", "motion", "spinning", "gyroscope", "perpetual"]
     },
 
-    "🎭 Yüz Değiştiren Figür": {
-        "search_terms": [
-            "face changing doll toy", "reversible mood plush",
-            "flip expression toy", "emotion changing figure",
-            "two face plush toy", "mood flip octopus"
+    "🎁 Mekanik Sürpriz Kutu": {
+        "base_terms": [
+            "mechanical surprise box", "pop up gift box",
+            "explosion box diy", "spring loaded box",
+            "puzzle box secret", "magic trick box"
         ],
-        "chinese_terms": [
-            "变脸 玩具", "翻转 表情 玩偶", "双面 毛绒",
-            "心情 变化 玩具", "表情包 玩偶"
-        ],
-        "1688_search": "翻转玩偶 表情",
-        "taobao_search": "变脸玩具 创意"
+        "chinese": ["机关礼盒", "弹出惊喜盒", "魔术盒"],
+        "tags": ["mechanical", "surprise", "pop up", "spring", "puzzle"]
     },
 
-    "📦 Sürpriz Mekanizma Kutu": {
-        "search_terms": [
-            "pop up surprise box mechanism", "spring loaded gift box",
-            "explosion gift box diy", "mechanical surprise box",
-            "auto open gift box", "puzzle surprise box"
+    "🦑 Yaratık/Canavar Figür": {
+        "base_terms": [
+            "monster blind box", "creature figure",
+            "alien toy figure", "cryptid figure",
+            "kaiju toy small", "monster gashapon"
         ],
-        "chinese_terms": [
-            "弹出 礼盒 机关", "爆炸 礼盒", "惊喜盒子 创意",
-            "机关 礼物盒", "自动 弹出 盒子"
-        ],
-        "1688_search": "创意礼盒 机关",
-        "taobao_search": "惊喜盒子 弹出"
+        "chinese": ["怪兽盲盒", "异形手办", "怪物扭蛋"],
+        "tags": ["monster", "creature", "alien", "kaiju", "cryptid"]
     },
 
-    "🎲 Otomatik Kart/Zar": {
-        "search_terms": [
-            "automatic card dealer toy", "dice roller tower",
-            "card shuffler dispenser", "random card picker machine",
-            "dice rolling machine toy", "card ejector toy"
+    "🎨 DIY/Montaj Oyuncak": {
+        "base_terms": [
+            "diy assembly toy", "build your own figure",
+            "mechanical puzzle 3d", "wooden puzzle toy",
+            "construction toy mini", "model kit small"
         ],
-        "chinese_terms": [
-            "自动发牌机", "骰子塔 桌游", "洗牌机 玩具",
-            "抽卡机 儿童", "随机 骰子机"
-        ],
-        "1688_search": "自动发牌机 玩具",
-        "taobao_search": "骰子塔 桌游配件"
+        "chinese": ["DIY拼装", "3D拼图", "木质模型"],
+        "tags": ["diy", "assembly", "puzzle", "build", "model", "kit"]
     },
 
-    "🎯 Mini Arcade Oyun": {
-        "search_terms": [
-            "mini arcade game machine", "retro game console small",
-            "desktop arcade toy", "mini pinball machine toy",
-            "small basketball game toy", "finger sports mini game"
+    "🔮 Sihirli/İllüzyon": {
+        "base_terms": [
+            "magic trick toy", "illusion toy desk",
+            "hologram display small", "infinity mirror toy",
+            "optical illusion toy", "magic cube puzzle"
         ],
-        "chinese_terms": [
-            "迷你游戏机 桌面", "复古街机 小型", "弹珠机 玩具",
-            "投篮机 迷你", "桌面 游戏机"
-        ],
-        "1688_search": "迷你游戏机 桌面",
-        "taobao_search": "迷你街机 复古"
+        "chinese": ["魔术玩具", "全息投影", "无限镜"],
+        "tags": ["magic", "illusion", "hologram", "infinity", "optical"]
     }
 }
 
+# --- ARAMA FONKSİYONLARI ---
+def smart_search(category, use_learning=True):
+    """Akıllı arama - öğrenilen tercihlerle zenginleştirilmiş"""
+    cat_data = SEARCH_CATEGORIES[category]
+    base_term = random.choice(cat_data["base_terms"])
 
-def generate_unique_query(category):
-    """Her seferinde FARKLI sorgu üret"""
-    data = NICHE_PRODUCTS[category]
+    # Öğrenilen terimleri ekle
+    if use_learning:
+        learned = get_smart_search_terms()
+        # Kategori tag'leriyle eşleşen öğrenilmiş terimler
+        matching_learned = [w for w in learned if any(tag in w.lower() for tag in cat_data["tags"])]
+        if matching_learned:
+            base_term = f"{base_term} {random.choice(matching_learned)}"
 
-    # Daha önce kullanılmamış bir sorgu bul
-    available_en = [q for q in data["search_terms"] if q not in st.session_state.used_queries]
-    available_cn = [q for q in data["chinese_terms"] if q not in st.session_state.used_queries]
+    # Çeşitlilik ekle
+    variations = ["2024", "new", "creative", "unique", "trending", "popular", "cute", "mini", "desktop"]
+    final_query = f"{base_term} {random.choice(variations)}"
 
-    if not available_en:
-        st.session_state.used_queries.clear()
-        available_en = data["search_terms"]
-        available_cn = data["chinese_terms"]
+    return final_query, random.choice(cat_data["chinese"])
 
-    en_query = random.choice(available_en)
-    cn_query = random.choice(available_cn) if available_cn else data["chinese_terms"][0]
-
-    st.session_state.used_queries.add(en_query)
-
-    # Çeşitlilik için ek terimler
-    variations = ["2024", "new", "creative", "unique", "trending", "popular", "best"]
-    en_query_varied = f"{en_query} {random.choice(variations)}"
-
-    return en_query_varied, cn_query, data["1688_search"], data["taobao_search"]
-
-
-def search_with_variety(query, max_results=6):
-    """Çeşitli sonuçlar getir"""
+def search_products(query, max_results=8):
+    """DuckDuckGo ile ürün ara"""
     results = []
 
     try:
         with DDGS() as ddgs:
-            # Zaman bazlı farklılık için
-            time_hash = hashlib.md5(str(datetime.now().timestamp()).encode()).hexdigest()[:8]
-            varied_query = f"{query} {time_hash[:3]}"
+            images = list(ddgs.images(query, max_results=max_results + 5))
 
-            images = list(ddgs.images(query, max_results=max_results * 2))
-
-            # Rastgele seç (her seferinde farklı sonuçlar)
+            # Rastgele seç
             if len(images) > max_results:
                 images = random.sample(images, max_results)
 
             for img in images:
                 results.append({
+                    "id": hash(img.get("image", ""))  % 100000,
                     "title": img.get("title", ""),
                     "image": img.get("image", ""),
                     "url": img.get("url", ""),
-                    "source": img.get("source", "")
+                    "source": img.get("source", ""),
+                    "query": query
                 })
     except Exception as e:
-        pass
+        st.warning(f"Arama hatası: {str(e)[:50]}")
 
     return results
 
-
-def create_platform_links(cn_query, en_query, search_1688, search_taobao):
-    """Platform linkleri oluştur"""
-    cn_encoded = urllib.parse.quote(cn_query)
-    en_encoded = urllib.parse.quote(en_query)
-    s1688_encoded = urllib.parse.quote(search_1688)
-    staobao_encoded = urllib.parse.quote(search_taobao)
+def generate_platform_links(query_en, query_cn):
+    """Platform linkleri"""
+    cn = urllib.parse.quote(query_cn)
+    en = urllib.parse.quote(query_en)
 
     return {
-        "xiaohongshu": f"https://www.xiaohongshu.com/search_result?keyword={cn_encoded}",
-        "douyin": f"https://www.douyin.com/search/{cn_encoded}",
-        "taobao": f"https://s.taobao.com/search?q={staobao_encoded}",
-        "1688": f"https://s.1688.com/selloffer/offer_search.htm?keywords={s1688_encoded}",
-        "alibaba": f"https://www.alibaba.com/trade/search?SearchText={en_encoded}",
-        "google": f"https://www.google.com/search?q={en_encoded}&tbm=isch"
+        "1688": f"https://s.1688.com/selloffer/offer_search.htm?keywords={cn}",
+        "taobao": f"https://s.taobao.com/search?q={cn}",
+        "xhs": f"https://www.xiaohongshu.com/search_result?keyword={cn}",
+        "douyin": f"https://www.douyin.com/search/{cn}",
+        "alibaba": f"https://www.alibaba.com/trade/search?SearchText={en}",
+        "google": f"https://www.google.com/search?q={en}&tbm=isch"
     }
 
+# --- TASARIM ---
+st.markdown("""
+<style>
+    .stApp { background: #0a0a0f; }
+
+    .header-box {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 2px solid #e94560;
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .product-card {
+        background: linear-gradient(145deg, #1a1a2e, #16213e);
+        border: 1px solid #0f3460;
+        border-radius: 16px;
+        padding: 0;
+        margin: 10px 0;
+        overflow: hidden;
+        transition: all 0.3s;
+    }
+    .product-card:hover {
+        border-color: #e94560;
+        transform: translateY(-5px);
+    }
+    .product-card img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+    }
+    .product-info {
+        padding: 15px;
+    }
+
+    .like-btn {
+        background: linear-gradient(90deg, #00b894, #00cec9);
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .dislike-btn {
+        background: linear-gradient(90deg, #e94560, #ff6b6b);
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .stats-box {
+        background: rgba(233, 69, 96, 0.1);
+        border: 1px solid #e94560;
+        border-radius: 12px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+
+    .learned-tag {
+        display: inline-block;
+        background: #00b894;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        margin: 3px;
+        font-size: 12px;
+    }
+    .negative-tag {
+        display: inline-block;
+        background: #e94560;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        margin: 3px;
+        font-size: 12px;
+    }
+
+    .platform-btn {
+        display: inline-block;
+        padding: 5px 10px;
+        margin: 3px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .p-1688 { background: #ff6600; color: white; }
+    .p-taobao { background: #ff5000; color: white; }
+    .p-xhs { background: #ff2442; color: white; }
+    .p-alibaba { background: #ff6a00; color: white; }
+</style>
+""", unsafe_allow_html=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("## 🔮 Kategori Seç")
+    st.markdown("## 🧠 Akıllı Tercih Sistemi")
 
+    # İstatistikler
+    stats = get_preference_stats()
+
+    st.markdown(f"""
+    <div class="stats-box">
+        <h4 style="color:#e94560; margin:0;">📊 Öğrenme Durumu</h4>
+        <p style="color:#ccc; margin:10px 0;">
+            ❤️ Beğenilen: <strong>{stats['total_likes']}</strong><br>
+            👎 Beğenilmeyen: <strong>{stats['total_dislikes']}</strong>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Öğrenilen pozitif kelimeler
+    if stats['top_positive']:
+        st.markdown("**✅ Sevdiğin Özellikler:**")
+        for word, count in stats['top_positive']:
+            st.markdown(f'<span class="learned-tag">{word} ({count})</span>', unsafe_allow_html=True)
+
+    # Öğrenilen negatif kelimeler
+    if stats['top_negative']:
+        st.markdown("**❌ Sevmediğin Özellikler:**")
+        for word, count in stats['top_negative']:
+            st.markdown(f'<span class="negative-tag">{word} ({count})</span>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Kategori seçimi
     selected_category = st.selectbox(
-        "Ürün Tipi",
-        options=list(NICHE_PRODUCTS.keys()),
-        index=0
+        "🎯 Kategori",
+        options=list(SEARCH_CATEGORIES.keys())
     )
 
-    st.markdown("---")
-
-    st.markdown("### ⚠️ ÖNEMLİ")
-    st.markdown("""
-    **DuckDuckGo sınırlıdır!**
-
-    Gerçek niş ürünleri bulmak için
-    aşağıdaki **Çin platformu linklerini**
-    kullan. Orada direkt Çince ile ara!
-    """)
+    use_learning = st.checkbox("🧠 Öğrenilmiş tercihleri kullan", value=True)
 
     st.markdown("---")
 
-    if st.button("🗑️ Aramayı Sıfırla", use_container_width=True):
-        st.session_state.products = []
-        st.session_state.used_queries.clear()
-        st.session_state.search_count = 0
-
+    # Sıfırlama
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Aramayı Sıfırla"):
+            st.session_state.products = []
+    with col2:
+        if st.button("🔄 Öğrenmeyi Sıfırla"):
+            save_json(LIKES_FILE, [])
+            save_json(DISLIKES_FILE, [])
+            save_learned_keywords({"positive": {}, "negative": {}, "patterns": []})
+            st.rerun()
 
 # --- ANA SAYFA ---
 st.markdown("""
-<div class="main-header">
-    <h1 style="color:#e94560; margin:0;">🔮 ÇİN NİŞ ÜRÜN BULUCU</h1>
+<div class="header-box">
+    <h1 style="color:#e94560; margin:0;">🧠 AKILLI ÜRÜN AVCISI</h1>
     <p style="color:#ccc; margin-top:10px;">
-        Sıradan değil, GERÇEKTEN FARKLI ürünleri bul!
+        Beğendikçe öğrenen, sana özel ürünler bulan sistem
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- SEÇİLİ KATEGORİ BİLGİSİ ---
-st.markdown(f"## {selected_category}")
+# Öğrenme durumu göster
+learned_terms = get_smart_search_terms()
+if learned_terms:
+    st.info(f"🧠 Öğrenilen tercihler: {', '.join(learned_terms[:5])}")
 
-cat_data = NICHE_PRODUCTS[selected_category]
-
-# Anahtar kelimeler göster
-st.markdown("### 🔑 Bu Kategoride Aranacak Kelimeler:")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("**İngilizce:**")
-    for term in cat_data["search_terms"][:4]:
-        st.markdown(f'<span class="keyword-tag">{term}</span>', unsafe_allow_html=True)
-
+# --- ARAMA ---
+col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    st.markdown("**Çince (Kopyala ve Yapıştır):**")
-    for term in cat_data["chinese_terms"][:4]:
-        st.markdown(f'<span class="chinese-keyword">{term}</span>', unsafe_allow_html=True)
+    if st.button("🔍 ÜRÜN ARA", type="primary", use_container_width=True):
+        with st.spinner("Akıllı arama yapılıyor..."):
+            query_en, query_cn = smart_search(selected_category, use_learning)
 
+            st.session_state.current_query_en = query_en
+            st.session_state.current_query_cn = query_cn
+
+            results = search_products(query_en, max_results=9)
+
+            for r in results:
+                r['category'] = selected_category
+
+            st.session_state.products = results
+            st.session_state.search_count += 1
+
+# Platform linkleri
+if hasattr(st.session_state, 'current_query_en'):
+    links = generate_platform_links(
+        st.session_state.get('current_query_en', ''),
+        st.session_state.get('current_query_cn', '')
+    )
+
+    st.markdown("### 🌏 Çin Platformlarında Ara:")
+    link_cols = st.columns(6)
+    with link_cols[0]:
+        st.markdown(f'<a href="{links["1688"]}" target="_blank" class="platform-btn p-1688">🏭 1688</a>', unsafe_allow_html=True)
+    with link_cols[1]:
+        st.markdown(f'<a href="{links["taobao"]}" target="_blank" class="platform-btn p-taobao">🛒 Taobao</a>', unsafe_allow_html=True)
+    with link_cols[2]:
+        st.markdown(f'<a href="{links["xhs"]}" target="_blank" class="platform-btn p-xhs">📕 小红书</a>', unsafe_allow_html=True)
+    with link_cols[3]:
+        st.markdown(f'<a href="{links["douyin"]}" target="_blank" class="platform-btn" style="background:#00f2ea; color:black;">🎵 抖音</a>', unsafe_allow_html=True)
+    with link_cols[4]:
+        st.markdown(f'<a href="{links["alibaba"]}" target="_blank" class="platform-btn p-alibaba">🌐 Alibaba</a>', unsafe_allow_html=True)
+    with link_cols[5]:
+        st.markdown(f'<a href="{links["google"]}" target="_blank" class="platform-btn" style="background:#4285f4; color:white;">🔍 Google</a>', unsafe_allow_html=True)
+
+# --- ÜRÜN KARTLARI ---
+if st.session_state.products:
+    st.markdown("---")
+    st.markdown(f"### 🎯 Bulunan Ürünler ({len(st.session_state.products)})")
+    st.markdown("*Beğendiğin ürünlere ❤️, beğenmediklerine 👎 tıkla. Sistem öğrenecek!*")
+
+    cols = st.columns(3)
+
+    for idx, product in enumerate(st.session_state.products):
+        with cols[idx % 3]:
+            # Görsel
+            if product.get('image'):
+                st.image(product['image'], use_container_width=True)
+
+            # Başlık
+            st.markdown(f"**{product.get('title', '')[:60]}...**")
+
+            # Beğeni butonları
+            btn_col1, btn_col2 = st.columns(2)
+
+            with btn_col1:
+                if st.button("❤️ Beğen", key=f"like_{idx}_{product.get('id', idx)}"):
+                    count = like_product(product)
+                    st.success(f"Beğenildi! (Toplam: {count})")
+                    st.rerun()
+
+            with btn_col2:
+                if st.button("👎 Beğenme", key=f"dislike_{idx}_{product.get('id', idx)}"):
+                    count = dislike_product(product)
+                    st.warning(f"Kaydedildi! (Toplam: {count})")
+                    st.rerun()
+
+            st.markdown("---")
+
+    # Daha fazla yükle
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 DAHA FAZLA ÜRÜN GETİR", use_container_width=True):
+        with st.spinner("Yeni ürünler aranıyor..."):
+            query_en, query_cn = smart_search(selected_category, use_learning)
+            new_results = search_products(query_en, max_results=6)
+            for r in new_results:
+                r['category'] = selected_category
+            st.session_state.products.extend(new_results)
+            st.rerun()
+
+else:
+    st.markdown("""
+    <div style="text-align:center; padding:50px; color:#888;">
+        <h3>🧠 Nasıl Çalışır?</h3>
+        <p>1. Kategori seç ve ara</p>
+        <p>2. Beğendiğin ürünlere ❤️ tıkla</p>
+        <p>3. Beğenmediklerine 👎 tıkla</p>
+        <p>4. Sistem senin zevkini öğrenir!</p>
+        <br>
+        <p style="color:#e94560;">
+            Ne kadar çok beğeni/beğenmeme yaparsan,<br>
+            sistem o kadar akıllı olur!
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- BEĞENİLEN ÜRÜNLER ---
 st.markdown("---")
-
-# --- PLATFORM LİNKLERİ (EN ÖNEMLİ KISIM) ---
-st.markdown("### 🌏 DİREKT ÇİN PLATFORMLARINDA ARA")
-st.markdown("*Bu linkler seni doğrudan Çince arama sonuçlarına götürür:*")
-
-en_q, cn_q, s1688, staobao = generate_unique_query(selected_category)
-links = create_platform_links(cn_q, en_q, s1688, staobao)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown(f'''
-    <a href="{links['1688']}" target="_blank" class="platform-link ali1688">
-        🏭 1688.com - TOPTAN FİYAT<br>
-        <small>Arama: {s1688}</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-    st.markdown(f'''
-    <a href="{links['taobao']}" target="_blank" class="platform-link taobao">
-        🛒 Taobao - PERAKENDE<br>
-        <small>Arama: {staobao}</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-    st.markdown(f'''
-    <a href="{links['alibaba']}" target="_blank" class="platform-link alibaba">
-        🌐 Alibaba - TOPTAN (EN)<br>
-        <small>Arama: {en_q[:30]}...</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-with col2:
-    st.markdown(f'''
-    <a href="{links['xiaohongshu']}" target="_blank" class="platform-link xhs">
-        📕 Xiaohongshu - TREND<br>
-        <small>Arama: {cn_q}</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-    st.markdown(f'''
-    <a href="{links['douyin']}" target="_blank" class="platform-link douyin">
-        🎵 Douyin - VİRAL VİDEO<br>
-        <small>Arama: {cn_q}</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-    st.markdown(f'''
-    <a href="{links['google']}" target="_blank" class="platform-link" style="background:#4285f4; color:white;">
-        🔍 Google Images<br>
-        <small>Arama: {en_q[:30]}...</small>
-    </a>
-    ''', unsafe_allow_html=True)
-
-# Kopyalanabilir Çince arama terimi
-st.markdown("---")
-st.markdown("### 📋 Kopyala & Yapıştır için Çince Terimler:")
-
-copy_terms = " | ".join(cat_data["chinese_terms"][:3])
-st.code(copy_terms, language=None)
-
-st.markdown(f"**1688 için:** `{s1688}`")
-st.markdown(f"**Taobao için:** `{staobao}`")
-
-# --- GÖRSEL ARAMA (BONUS) ---
-st.markdown("---")
-st.markdown("### 🖼️ Örnek Görseller (DuckDuckGo)")
-st.markdown("*Not: Gerçek niş ürünler için yukarıdaki Çin platformu linklerini kullan!*")
-
-if st.button("🔍 Örnek Görseller Getir", type="primary", use_container_width=True):
-    with st.spinner("Aranıyor..."):
-        st.session_state.search_count += 1
-
-        # Her tıklamada farklı sorgu
-        query_index = st.session_state.search_count % len(cat_data["search_terms"])
-        search_query = cat_data["search_terms"][query_index]
-
-        results = search_with_variety(search_query, max_results=6)
-
-        if results:
-            cols = st.columns(3)
-            for i, result in enumerate(results):
-                with cols[i % 3]:
-                    if result.get("image"):
-                        st.image(result["image"], use_container_width=True)
-                        st.caption(result.get("title", "")[:50])
-        else:
-            st.warning("Görsel bulunamadı. Yukarıdaki platform linklerini dene!")
-
-# --- İPUÇLARI ---
-st.markdown("---")
-st.markdown("""
-<div class="tip-card">
-    <h4 style="color:#e94560; margin-top:0;">💡 NİŞ ÜRÜN BULMA İPUÇLARI</h4>
-    <ol style="color:#ccc;">
-        <li><strong>1688.com</strong> - Çin'in en büyük toptan platformu. Fabrika fiyatları!</li>
-        <li><strong>Xiaohongshu</strong> - Çinli influencer'ların paylaştığı trend ürünler</li>
-        <li><strong>Douyin</strong> - Viral olan ürünleri bul (TikTok'un Çin versiyonu)</li>
-        <li>Çince terimleri kopyala ve direkt platformlarda ara</li>
-        <li>Ürün görselini Google Lens ile tersine ara</li>
-    </ol>
-</div>
-""", unsafe_allow_html=True)
-
-# --- TÜM ÇİNCE TERİMLER ---
-st.markdown("---")
-st.markdown("### 📚 Tüm Kategoriler için Çince Arama Terimleri")
-
-with st.expander("Tüm Çince Terimleri Göster"):
-    for cat_name, cat_data in NICHE_PRODUCTS.items():
-        st.markdown(f"**{cat_name}**")
-        st.code(" | ".join(cat_data["chinese_terms"]), language=None)
-        st.markdown(f"1688: `{cat_data['1688_search']}` | Taobao: `{cat_data['taobao_search']}`")
-        st.markdown("---")
+with st.expander("❤️ Beğendiğin Ürünleri Gör"):
+    liked = load_json(LIKES_FILE)
+    if liked:
+        like_cols = st.columns(4)
+        for i, item in enumerate(liked[-8:]):  # Son 8 beğeni
+            with like_cols[i % 4]:
+                if item.get('image'):
+                    st.image(item['image'], use_container_width=True)
+                st.caption(item.get('title', '')[:30])
+    else:
+        st.info("Henüz beğenilen ürün yok. Aramaya başla!")
 
 # --- FOOTER ---
+st.markdown("---")
 st.markdown("""
-<div style="text-align:center; color:#555; padding:30px;">
-    <p>🔮 Çin Niş Ürün Bulucu v5.0</p>
-    <p style="font-size:12px;">Platform linkleri ile doğrudan Çin sitelerinde ara!</p>
+<div style="text-align:center; color:#555; padding:20px;">
+    <p>🧠 Akıllı Ürün Avcısı v6.0</p>
+    <p style="font-size:12px;">Beğendikçe öğrenen, sana özel ürün bulan sistem</p>
 </div>
 """, unsafe_allow_html=True)
