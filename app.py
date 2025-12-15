@@ -121,20 +121,6 @@ def get_preference_stats():
         'patterns': keywords.get('patterns', [])[:5]
     }
 
-# --- PLATFORMLAR ---
-PLATFORMS = [
-    "site:aliexpress.com",
-    "site:alibaba.com",
-    "site:dhgate.com",
-    "site:amazon.com",
-    "site:ebay.com",
-    "site:wish.com",
-    "site:banggood.com",
-    "site:gearbest.com",
-    "site:made-in-china.com",
-    "site:etsy.com"
-]
-
 # --- FARKLI SÜRPRİZ KUTU KATEGORİLERİ ---
 INTERESTING_CATEGORIES = {
     "🎰 Gashapon & Kapsül Makineleri": {
@@ -508,124 +494,81 @@ VARIATION_WORDS = [
 ]
 
 # --- ARAMA FONKSİYONLARI ---
-def multi_platform_search(search_terms, max_results=12, max_retries=3):
-    """Birden fazla platformda arama yap - gelişmiş çeşitlilik"""
+def multi_platform_search(search_terms, max_results=12, max_retries=2):
+    """Basit ve hızlı arama"""
     all_results = []
-
-    # Daha önce gösterilen görselleri al
     shown_images = st.session_state.get('shown_images', set())
-    used_queries = st.session_state.get('used_queries', set())
 
-    # Rastgele 4-5 platform seç
-    selected_platforms = random.sample(PLATFORMS, min(5, len(PLATFORMS)))
-
-    # Tüm terimleri karıştır ve kullanılmamış olanları önceliklendir
+    # Terimleri karıştır
     shuffled_terms = search_terms.copy()
     random.shuffle(shuffled_terms)
 
-    # Kullanılmamış terimleri öne al
-    unused_terms = [t for t in shuffled_terms if t not in used_queries]
-    used_terms_list = [t for t in shuffled_terms if t in used_queries]
-    prioritized_terms = unused_terms + used_terms_list
-
-    # 4-5 terim seç
-    selected_terms = prioritized_terms[:min(5, len(prioritized_terms))]
+    # 3-4 terim seç
+    selected_terms = shuffled_terms[:4]
 
     for term in selected_terms:
-        # Her terim için rastgele bir platform
-        platform = random.choice(selected_platforms)
-
-        # Çeşitlilik kelimesi ekle
+        # Basit sorgu - site: olmadan
         variation = random.choice(VARIATION_WORDS)
-        query = f"{platform} {term} {variation}"
+        query = f"{term} {variation}"
 
-        # Kullanılan sorguyu kaydet
-        st.session_state.used_queries.add(term)
-
-        results = search_with_retry(query, max_results=6, max_retries=max_retries)
+        results = search_with_retry(query, max_results=8, max_retries=max_retries)
 
         for r in results:
-            r['platform'] = platform.replace('site:', '').replace('.com', '')
+            r['platform'] = 'web'
             r['search_term'] = term
 
         all_results.extend(results)
+        time.sleep(0.2)
 
-        # Rate limiting önlemi
-        time.sleep(0.3)
-
-    # Genel arama da ekle (site filtresi olmadan, farklı varyasyon)
-    general_term = random.choice(selected_terms)
-    variation2 = random.choice(VARIATION_WORDS)
-    general_results = search_with_retry(f"{general_term} {variation2}", max_results=5, max_retries=max_retries)
-    for r in general_results:
-        r['platform'] = 'web'
-        r['search_term'] = general_term
-    all_results.extend(general_results)
-
-    # Karıştır ve benzersiz yap - daha önce gösterilenleri filtrele
+    # Benzersiz sonuçları filtrele
     unique_results = []
     random.shuffle(all_results)
 
     for r in all_results:
         image_url = r.get('image', '')
-        # Daha önce gösterilmemiş ve benzersiz olmalı
         if image_url and image_url not in shown_images:
-            # Bu aramada da tekrar etmesin
             already_in_results = any(existing['image'] == image_url for existing in unique_results)
             if not already_in_results:
                 unique_results.append(r)
-                # Gösterilen görseller listesine ekle
                 st.session_state.shown_images.add(image_url)
                 if len(unique_results) >= max_results:
                     break
 
     return unique_results
 
-def search_with_retry(query, max_results=8, max_retries=3):
-    """Retry logic ile arama - güçlendirilmiş hata yönetimi"""
+def search_with_retry(query, max_results=8, max_retries=2):
+    """Hızlı arama - kısa timeout"""
     results = []
 
     for attempt in range(max_retries):
         try:
             if attempt > 0:
-                wait_time = (2 ** attempt) + random.uniform(0, 1)
-                time.sleep(wait_time)
+                time.sleep(1)
 
-            ddgs = DDGS(timeout=25)
+            ddgs = DDGS(timeout=10)
             images = list(ddgs.images(
                 query,
-                max_results=max_results + 10,
+                max_results=max_results + 5,
                 safesearch='off'
             ))
 
             if images:
-                # Rastgele seç
                 random.shuffle(images)
-                selected = images[:max_results]
-
-                for img in selected:
+                for img in images[:max_results]:
                     image_url = img.get("image", "")
-                    title = img.get("title", "")
-
-                    # Geçerli görsel ve başlık kontrolü
                     if image_url and len(image_url) > 10:
                         results.append({
                             "id": hash(image_url + str(random.random())) % 1000000,
-                            "title": title if title else "Ürün",
+                            "title": img.get("title", "Ürün"),
                             "image": image_url,
                             "url": img.get("url", ""),
                             "source": img.get("source", ""),
                             "query": query
                         })
-
                 if results:
                     return results
 
         except Exception as e:
-            error_str = str(e).lower()
-            # Rate limit durumunda daha uzun bekle
-            if "ratelimit" in error_str or "429" in error_str:
-                time.sleep(5)
             if attempt < max_retries - 1:
                 continue
 
@@ -930,7 +873,7 @@ with st.expander("❤️ Beğendiğin Ürünler"):
 st.markdown("---")
 st.markdown("""
 <div style="text-align:center; color:#555; padding:20px;">
-    <p>🎁 Sürpriz Kutu Avcısı v8.1</p>
-    <p style="font-size:12px;">24 Farklı Tür • Tekrarsız Sonuçlar • Çeşitlilik Garantisi</p>
+    <p>🎁 Sürpriz Kutu Avcısı v8.2</p>
+    <p style="font-size:12px;">24 Farklı Tür • Hızlı Arama • Çeşitlilik Garantisi</p>
 </div>
 """, unsafe_allow_html=True)
