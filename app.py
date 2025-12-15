@@ -10,8 +10,8 @@ import re
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="İlginç Ürün Avcısı",
-    page_icon="🎯",
+    page_title="Sürpriz Kutu Avcısı",
+    page_icon="🎁",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -131,275 +131,365 @@ PLATFORMS = [
     "site:etsy.com"
 ]
 
-# --- İLGİNÇ ÜRÜN KATEGORİLERİ ---
+# --- FARKLI SÜRPRİZ KUTU KATEGORİLERİ ---
 INTERESTING_CATEGORIES = {
-    "🎰 Mini Otomatlar & Makineler": {
+    "🎰 Gashapon & Kapsül Makineleri": {
         "searches": [
-            "mini gashapon machine capsule dispenser",
-            "desktop candy vending machine",
+            "mini gashapon machine toy",
+            "capsule vending machine desktop",
+            "gachapon dispenser small",
+            "egg twisting machine toy",
+            "capsule toy machine mini",
+            "gacha machine collectible",
+            "japanese capsule machine small",
+            "twist egg dispenser toy",
+            "coin gashapon machine mini",
+            "desktop gachapon dispenser"
+        ]
+    },
+
+    "🥚 Sürpriz Yumurta & Egg": {
+        "searches": [
+            "surprise egg toy collectible",
+            "mystery egg figure inside",
+            "hatch egg surprise toy",
+            "growing egg dinosaur",
+            "magic egg water grow",
+            "kinder style surprise egg",
+            "giant surprise egg toy",
+            "hatching egg interactive",
+            "egg pod surprise figure",
+            "crack egg mystery toy"
+        ]
+    },
+
+    "🔮 Sürpriz Top & Ball": {
+        "searches": [
+            "LOL surprise ball toy",
+            "mystery ball collectible",
+            "surprise ball layers unwrap",
+            "orb surprise toy figure",
+            "sphere mystery collectible",
+            "ball surprise unboxing toy",
+            "round mystery capsule",
+            "globe surprise figure",
+            "layered ball surprise",
+            "pop ball mystery toy"
+        ]
+    },
+
+    "🎪 Mini Claw & Vinç Makinesi": {
+        "searches": [
             "mini claw machine toy",
-            "gachapon egg machine small",
-            "coin operated mini game",
-            "capsule toy vending small",
-            "desktop slot machine toy",
-            "mini crane game machine",
-            "candy grabber machine small",
-            "egg twisting machine toy"
+            "crane game machine small",
+            "candy grabber desktop",
+            "claw machine home mini",
+            "grabber machine toy small",
+            "arcade claw mini home",
+            "prize claw machine desktop",
+            "UFO catcher mini toy",
+            "crane catcher small machine",
+            "claw grab toy dispenser"
         ]
     },
 
-    "🌊 Reçine & Epoksi Sanat Küpleri": {
+    "📦 Katmanlı Unboxing (LOL Style)": {
         "searches": [
-            "resin diorama cube ocean",
-            "epoxy whale shark lamp",
-            "titanic resin cube ship",
-            "underwater world resin",
-            "deep sea diorama cube",
-            "jellyfish resin lamp",
-            "resin aquarium cube art",
-            "ocean scene epoxy cube",
-            "shipwreck resin diorama",
-            "coral reef resin art"
+            "layered surprise unboxing",
+            "multi layer mystery box",
+            "unwrap surprise layers toy",
+            "peel reveal surprise",
+            "layer by layer surprise",
+            "unboxing layers collectible",
+            "wrapped layers mystery",
+            "surprise layers fashion doll",
+            "multiple unwrap surprise",
+            "reveal layer toy"
         ]
     },
 
-    "📱 Telefon Hippers & Ekran Figürleri": {
+    "🎁 Pop-Up & Patlayan Kutular": {
         "searches": [
-            "phone hippers figure screen",
-            "sonny angel phone decoration",
-            "screen buddy figure cute",
-            "phone dust plug figure",
-            "cable bite animal protector",
-            "phone stand figure cute",
-            "monitor buddy toy small",
-            "laptop decoration figure",
-            "screen hanger toy cute",
-            "phone charm dangling figure"
+            "explosion surprise box gift",
+            "pop up gift box DIY",
+            "jumping surprise box",
+            "spring loaded gift box",
+            "exploding photo box",
+            "pop out surprise cube",
+            "jack in box style toy",
+            "spring surprise box toy",
+            "popping gift box mechanism",
+            "surprise explosion cube"
         ]
     },
 
-    "🎁 Mekanik Sürpriz Kutuları": {
+    "🗝️ Puzzle & Gizli Kutular": {
         "searches": [
-            "mechanical surprise box pop up",
-            "explosion gift box diy",
-            "spring loaded surprise box",
-            "jumping scare box toy",
             "puzzle box secret compartment",
-            "magic trick box disappear",
-            "wooden puzzle box secret",
-            "surprise explosion photo box",
-            "pop up cube gift box",
-            "mechanical iris box"
+            "mystery puzzle box wooden",
+            "secret box mechanism",
+            "trick box hidden",
+            "japanese puzzle box",
+            "brain teaser box secret",
+            "hidden compartment box",
+            "cryptex puzzle cylinder",
+            "escape room puzzle box",
+            "lock box puzzle toy"
         ]
     },
 
-    "🔮 Sihirli & İllüzyon Oyuncaklar": {
+    "🛒 Mini Brands & Minyatür": {
         "searches": [
-            "infinity mirror cube toy",
-            "hologram display small 3d",
-            "levitating display magnetic",
-            "optical illusion spinner",
-            "impossible object puzzle",
-            "magic cube transforming",
-            "holographic projector small",
-            "infinity cube fidget",
-            "mirror illusion box",
-            "floating ball magic toy"
+            "mini brands surprise capsule",
+            "miniature real brands toy",
+            "tiny replica brand products",
+            "mini grocery surprise",
+            "small brands collectible",
+            "miniature shopping surprise",
+            "real littles mini",
+            "tiny brands capsule",
+            "mini products surprise",
+            "shopkins real littles"
         ]
     },
 
-    "🌀 Kinetik & Hareket Oyuncakları": {
+    "🏪 Mini Otomat & Vending": {
         "searches": [
-            "perpetual motion desk toy",
-            "kinetic sculpture small",
-            "newton cradle premium",
-            "gyroscope metal precision",
-            "spinning top forever",
-            "balance bird toy",
-            "magnetic sculpture desk",
-            "tumbling toy physics",
-            "pendulum wave toy",
-            "kinetic sand sculpture"
+            "mini vending machine toy",
+            "desktop vending machine",
+            "small dispenser machine toy",
+            "candy vending mini",
+            "toy vending machine home",
+            "snack dispenser mini toy",
+            "coin operated toy dispenser",
+            "mini slot machine toy",
+            "capsule vending desktop",
+            "automatic dispenser toy small"
         ]
     },
 
-    "🎭 Koleksiyon Blind Box Figürler": {
+    "🎭 Blind Bag & Poşet Sürpriz": {
         "searches": [
-            "designer blind box figure",
-            "art toy collectible small",
-            "popmart blind box",
-            "labubu figure blind box",
-            "molly blind box figure",
-            "skullpanda blind box",
-            "dimoo blind box",
-            "hirono blind box",
-            "farmer bob blind box",
-            "baby three blind box"
+            "blind bag figure collectible",
+            "mystery bag toy surprise",
+            "foil bag surprise figure",
+            "sealed bag mystery",
+            "grab bag surprise toy",
+            "lucky bag mystery figure",
+            "random bag collectible",
+            "surprise pouch figure",
+            "mystery pack blind",
+            "secret bag toy figure"
         ]
     },
 
-    "🦕 Mini Dünya & Diorama": {
+    "🥫 Sürpriz Kutu & Tin Can": {
         "searches": [
-            "miniature world terrarium",
-            "tiny diorama cube",
-            "micro landscape glass",
-            "miniature room box kit",
-            "small world jar terrarium",
-            "mini garden terrarium kit",
-            "book nook diorama insert",
-            "shadow box diorama small",
-            "miniature scene glass dome",
-            "tiny world snow globe"
+            "mystery tin surprise toy",
+            "surprise can collectible",
+            "tin container mystery figure",
+            "metal box surprise toy",
+            "can surprise blind",
+            "treasure tin mystery",
+            "collectible tin surprise",
+            "metal container mystery toy",
+            "surprise tin box figure",
+            "cylinder mystery container"
         ]
     },
 
-    "💡 LED & Işıklı Dekoratif": {
+    "💧 Suyla Açılan Sürpriz": {
         "searches": [
-            "led cloud light lamp",
-            "neon sign small custom",
-            "galaxy projector lamp",
-            "thunder cloud lamp storm",
-            "moon lamp levitating",
-            "crystal ball lamp 3d",
-            "aurora projector night",
-            "jellyfish lamp lava",
-            "plasma ball small",
-            "fiber optic lamp color"
+            "water reveal surprise toy",
+            "grow in water surprise",
+            "water activated mystery",
+            "dissolve reveal surprise",
+            "fizz ball surprise toy",
+            "bath bomb surprise inside",
+            "water growing egg",
+            "fizzing surprise ball",
+            "melt reveal mystery",
+            "dissolving surprise egg"
         ]
     },
 
-    "🎪 Retro Mini Arcade": {
+    "🔥 Renk Değiştiren Sürpriz": {
         "searches": [
-            "mini arcade machine retro",
-            "tiny pinball machine desk",
-            "mini basketball game desktop",
-            "small pacman arcade",
-            "retro game console mini",
-            "finger arcade game small",
-            "mini claw arcade keychain",
-            "pocket game machine retro",
-            "tabletop arcade tiny",
-            "mini tetris game handheld"
+            "color change surprise toy",
+            "heat reveal mystery",
+            "temperature change figure",
+            "color reveal doll water",
+            "magic color change toy",
+            "UV light reveal surprise",
+            "sun activated color toy",
+            "thermal color change figure",
+            "color changing mystery",
+            "reveal color surprise toy"
         ]
     },
 
-    "🐙 Yaratık & Canavar Figürler": {
+    "🎨 DIY & Montaj Sürpriz": {
         "searches": [
-            "monster blind box figure",
-            "creature collectible small",
-            "kaiju figure gashapon",
-            "alien figure small toy",
-            "cryptid figure collection",
-            "monster hunter figure small",
-            "yokai figure japanese",
-            "lovecraft creature figure",
-            "deep sea creature figure",
-            "mutant figure blind box"
+            "DIY surprise figure kit",
+            "build your own mystery",
+            "assembly surprise toy",
+            "construct mystery figure",
+            "make your own blind box",
+            "DIY capsule toy kit",
+            "assemble surprise collectible",
+            "building mystery figure",
+            "create your surprise toy",
+            "craft mystery box kit"
         ]
     },
 
-    "🎨 Transforming & Şekil Değiştiren": {
+    "🍬 Şeker & Yiyecek Temalı": {
         "searches": [
-            "transforming cube puzzle",
-            "shape shifting box toy",
-            "magnetic blocks transform",
-            "rubik snake puzzle",
-            "infinity cube transform",
-            "fidget cube transformer",
-            "changeable magnetic cube",
-            "morphing ball toy",
-            "geometric transform toy",
-            "magic snake cube"
+            "candy surprise container",
+            "food shaped mystery toy",
+            "sweet surprise dispenser",
+            "snack box surprise toy",
+            "candy machine surprise",
+            "food surprise blind",
+            "gummy surprise toy",
+            "dessert mystery figure",
+            "candy dispenser mystery",
+            "food theme blind box"
         ]
     },
 
-    "🌸 Kawaii & Japon Tarzı": {
+    "🎠 Nostaljik & Retro Sürpriz": {
         "searches": [
-            "sanrio gashapon figure",
-            "kuromi blind box small",
-            "cinnamoroll figure mini",
-            "sumikko gurashi figure",
-            "rilakkuma capsule toy",
-            "gudetama figure small",
-            "pompompurin gashapon",
-            "my melody figure mini",
-            "japanese capsule toy cute",
-            "kawaii desk figure small"
+            "retro surprise toy vintage",
+            "classic mystery toy style",
+            "vintage capsule toy",
+            "old style surprise box",
+            "nostalgic mystery figure",
+            "throwback blind box",
+            "retro gachapon style",
+            "vintage vending toy",
+            "classic surprise egg style",
+            "80s 90s style mystery"
         ]
     },
 
-    "🏰 Disney & Karakter Sürpriz": {
+    "🎪 Karnaval & Festival Oyunları": {
         "searches": [
-            "disney doorables mini",
-            "stitch blind box figure",
-            "disney tsum tsum small",
+            "carnival game prize toy",
+            "festival surprise game",
+            "fair game mini toy",
+            "lucky draw machine mini",
+            "spin wheel prize toy",
+            "lottery machine toy small",
+            "fortune wheel mini",
+            "prize game desktop toy",
+            "carnival claw mini",
+            "lucky spin surprise toy"
+        ]
+    },
+
+    "🌟 Premium & Koleksiyon": {
+        "searches": [
+            "premium blind box figure",
+            "limited edition mystery",
+            "rare collectible surprise",
+            "designer mystery figure",
+            "luxury blind box art toy",
+            "exclusive capsule collectible",
+            "special edition mystery box",
+            "high end blind box",
+            "collector mystery figure",
+            "rare chase variant blind"
+        ]
+    },
+
+    "🐾 Hayvan & Pet Temalı": {
+        "searches": [
+            "animal surprise blind box",
+            "pet figure mystery",
+            "zoo animal capsule toy",
+            "cute animal blind bag",
+            "wildlife surprise figure",
+            "farm animal mystery",
+            "sea creature blind box",
+            "insect surprise capsule",
+            "dinosaur mystery egg",
+            "cat dog surprise figure"
+        ]
+    },
+
+    "🌸 Kawaii & Anime Sürpriz": {
+        "searches": [
+            "anime blind box figure",
+            "kawaii mystery capsule",
+            "sanrio surprise figure",
+            "chibi character blind box",
+            "japanese anime mystery",
+            "cute character gashapon",
+            "manga style blind box",
+            "otaku mystery figure",
+            "anime gashapon japan",
+            "kawaii character capsule"
+        ]
+    },
+
+    "🦸 Karakter & Lisanslı": {
+        "searches": [
+            "disney mystery mini figure",
+            "marvel surprise blind bag",
+            "pokemon mystery box figure",
+            "harry potter mystery mini",
+            "star wars blind box",
+            "nintendo surprise figure",
             "pixar mystery mini",
-            "marvel micro figure blind",
-            "disney animator mini",
-            "funko mystery mini disney",
-            "disney villain small figure",
-            "princess capsule figure",
-            "toy story mini blind"
+            "dc comics blind bag",
+            "cartoon network mystery",
+            "dreamworks surprise capsule"
         ]
     },
 
-    "🔧 Mekanik & Steampunk": {
+    "🎲 Rastgele & Şans Oyunu": {
         "searches": [
-            "steampunk desk toy metal",
-            "mechanical insect model",
-            "clockwork toy vintage",
-            "metal puzzle 3d mechanical",
-            "steam engine model small",
-            "gear cube puzzle metal",
-            "mechanical spider model",
-            "steampunk music box",
-            "wind up metal toy",
-            "mechanical bird automaton"
+            "lucky box random toy",
+            "fortune box surprise",
+            "chance box mystery",
+            "random selection box",
+            "luck based surprise",
+            "gamble box toy figure",
+            "lottery style mystery",
+            "random mystery selection",
+            "lucky draw surprise box",
+            "chance surprise capsule"
         ]
     },
 
-    "🎲 Benzersiz Zar & Oyun": {
+    "🔬 Bilim & Eğitici Sürpriz": {
         "searches": [
-            "unusual dice set unique",
-            "liquid core dice",
-            "sharp edge dice resin",
-            "mini board game travel",
-            "dice tower small",
-            "metal dice premium",
-            "glow dark dice set",
-            "gemstone dice real",
-            "spinner dice fidget",
-            "fortune telling dice"
+            "science surprise dig kit",
+            "excavation mystery toy",
+            "fossil dig surprise",
+            "gem dig mystery box",
+            "archaeology surprise kit",
+            "crystal grow surprise",
+            "STEM mystery box",
+            "educational surprise toy",
+            "discovery dig kit",
+            "mineral dig surprise"
         ]
     },
 
-    "🌿 Canlı Gibi & Simülasyon": {
+    "🏠 Mobilya & Minyatür Dünya": {
         "searches": [
-            "realistic food miniature",
-            "fake food keychain japan",
-            "simulation food toy",
-            "miniature food blind box",
-            "squishy realistic slow",
-            "fake dessert display",
-            "food sample replica",
-            "mini cooking real tiny",
-            "realistic fruit squishy",
-            "fake sushi display"
-        ]
-    },
-
-    "🎵 Müzik Kutusu & Melodi": {
-        "searches": [
-            "music box mechanism small",
-            "hand crank music box",
-            "crystal ball music box",
-            "custom music box diy",
-            "wooden music box vintage",
-            "carousel music box mini",
-            "snow globe music box",
-            "piano music box small",
-            "music box movement custom",
-            "orgel music box japanese"
+            "miniature furniture blind box",
+            "tiny room surprise",
+            "dollhouse mystery capsule",
+            "mini scene surprise box",
+            "room diorama blind",
+            "furniture miniature mystery",
+            "small world surprise",
+            "micro room blind box",
+            "house miniature capsule",
+            "decor mini surprise"
         ]
     }
 }
@@ -633,9 +723,9 @@ with st.sidebar:
 # --- ANA SAYFA ---
 st.markdown("""
 <div class="header-box">
-    <h1 style="color:#00d4ff; margin:0;">🎯 İLGİNÇ ÜRÜN AVCISI</h1>
+    <h1 style="color:#00d4ff; margin:0;">🎁 SÜRPRİZ KUTU AVCISI</h1>
     <p style="color:#ccc; margin-top:10px;">
-        Multi-platform arama • Benzersiz ürünler • Öğrenen sistem
+        24 Farklı Sürpriz Kutu Türü • Multi-Platform Arama • Öğrenen Sistem
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -782,7 +872,7 @@ with st.expander("❤️ Beğendiğin Ürünler"):
 st.markdown("---")
 st.markdown("""
 <div style="text-align:center; color:#555; padding:20px;">
-    <p>🎯 İlginç Ürün Avcısı v7.0</p>
-    <p style="font-size:12px;">Multi-platform • Akıllı arama • Öğrenen sistem</p>
+    <p>🎁 Sürpriz Kutu Avcısı v8.0</p>
+    <p style="font-size:12px;">24 Farklı Tür • Multi-Platform • Öğrenen Sistem</p>
 </div>
 """, unsafe_allow_html=True)
