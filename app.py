@@ -26,6 +26,10 @@ if 'products' not in st.session_state:
     st.session_state.products = []
 if 'search_count' not in st.session_state:
     st.session_state.search_count = 0
+if 'shown_images' not in st.session_state:
+    st.session_state.shown_images = set()
+if 'used_queries' not in st.session_state:
+    st.session_state.used_queries = set()
 
 # --- VERİTABANI FONKSİYONLARI ---
 def load_json(filename):
@@ -494,23 +498,51 @@ INTERESTING_CATEGORIES = {
     }
 }
 
+# --- ÇEŞİTLİLİK KELİMELERİ ---
+VARIATION_WORDS = [
+    "2024", "2025", "new", "latest", "trending", "popular", "hot",
+    "cute", "kawaii", "unique", "creative", "novel", "special",
+    "mini", "small", "desktop", "portable", "pocket",
+    "collectible", "limited", "exclusive", "rare",
+    "toy", "figure", "model", "decoration"
+]
+
 # --- ARAMA FONKSİYONLARI ---
 def multi_platform_search(search_terms, max_results=12, max_retries=3):
-    """Birden fazla platformda arama yap"""
+    """Birden fazla platformda arama yap - gelişmiş çeşitlilik"""
     all_results = []
 
-    # Rastgele 3-4 platform seç
-    selected_platforms = random.sample(PLATFORMS, min(4, len(PLATFORMS)))
+    # Daha önce gösterilen görselleri al
+    shown_images = st.session_state.get('shown_images', set())
+    used_queries = st.session_state.get('used_queries', set())
 
-    # Rastgele 2-3 arama terimi seç
-    selected_terms = random.sample(search_terms, min(3, len(search_terms)))
+    # Rastgele 4-5 platform seç
+    selected_platforms = random.sample(PLATFORMS, min(5, len(PLATFORMS)))
+
+    # Tüm terimleri karıştır ve kullanılmamış olanları önceliklendir
+    shuffled_terms = search_terms.copy()
+    random.shuffle(shuffled_terms)
+
+    # Kullanılmamış terimleri öne al
+    unused_terms = [t for t in shuffled_terms if t not in used_queries]
+    used_terms_list = [t for t in shuffled_terms if t in used_queries]
+    prioritized_terms = unused_terms + used_terms_list
+
+    # 4-5 terim seç
+    selected_terms = prioritized_terms[:min(5, len(prioritized_terms))]
 
     for term in selected_terms:
         # Her terim için rastgele bir platform
         platform = random.choice(selected_platforms)
-        query = f"{platform} {term}"
 
-        results = search_with_retry(query, max_results=5, max_retries=max_retries)
+        # Çeşitlilik kelimesi ekle
+        variation = random.choice(VARIATION_WORDS)
+        query = f"{platform} {term} {variation}"
+
+        # Kullanılan sorguyu kaydet
+        st.session_state.used_queries.add(term)
+
+        results = search_with_retry(query, max_results=6, max_retries=max_retries)
 
         for r in results:
             r['platform'] = platform.replace('site:', '').replace('.com', '')
@@ -519,53 +551,67 @@ def multi_platform_search(search_terms, max_results=12, max_retries=3):
         all_results.extend(results)
 
         # Rate limiting önlemi
-        time.sleep(0.5)
+        time.sleep(0.3)
 
-    # Genel arama da ekle (site filtresi olmadan)
-    general_term = random.choice(search_terms)
-    general_results = search_with_retry(general_term, max_results=4, max_retries=max_retries)
+    # Genel arama da ekle (site filtresi olmadan, farklı varyasyon)
+    general_term = random.choice(selected_terms)
+    variation2 = random.choice(VARIATION_WORDS)
+    general_results = search_with_retry(f"{general_term} {variation2}", max_results=5, max_retries=max_retries)
     for r in general_results:
         r['platform'] = 'web'
         r['search_term'] = general_term
     all_results.extend(general_results)
 
-    # Karıştır ve benzersiz yap
-    seen_urls = set()
+    # Karıştır ve benzersiz yap - daha önce gösterilenleri filtrele
     unique_results = []
     random.shuffle(all_results)
 
     for r in all_results:
-        if r['image'] not in seen_urls:
-            seen_urls.add(r['image'])
-            unique_results.append(r)
-            if len(unique_results) >= max_results:
-                break
+        image_url = r.get('image', '')
+        # Daha önce gösterilmemiş ve benzersiz olmalı
+        if image_url and image_url not in shown_images:
+            # Bu aramada da tekrar etmesin
+            already_in_results = any(existing['image'] == image_url for existing in unique_results)
+            if not already_in_results:
+                unique_results.append(r)
+                # Gösterilen görseller listesine ekle
+                st.session_state.shown_images.add(image_url)
+                if len(unique_results) >= max_results:
+                    break
 
     return unique_results
 
 def search_with_retry(query, max_results=8, max_retries=3):
-    """Retry logic ile arama"""
+    """Retry logic ile arama - güçlendirilmiş hata yönetimi"""
     results = []
-    last_error = None
 
     for attempt in range(max_retries):
         try:
             if attempt > 0:
-                time.sleep(2 ** attempt)
+                wait_time = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(wait_time)
 
-            ddgs = DDGS(timeout=20)
-            images = list(ddgs.images(query, max_results=max_results + 5, safesearch='off'))
+            ddgs = DDGS(timeout=25)
+            images = list(ddgs.images(
+                query,
+                max_results=max_results + 10,
+                safesearch='off'
+            ))
 
             if images:
-                if len(images) > max_results:
-                    images = random.sample(images, max_results)
+                # Rastgele seç
+                random.shuffle(images)
+                selected = images[:max_results]
 
-                for img in images:
+                for img in selected:
                     image_url = img.get("image", "")
-                    if image_url:
+                    title = img.get("title", "")
+
+                    # Geçerli görsel ve başlık kontrolü
+                    if image_url and len(image_url) > 10:
                         results.append({
-                            "id": hash(image_url) % 100000,
-                            "title": img.get("title", "Ürün"),
+                            "id": hash(image_url + str(random.random())) % 1000000,
+                            "title": title if title else "Ürün",
                             "image": image_url,
                             "url": img.get("url", ""),
                             "source": img.get("source", ""),
@@ -576,7 +622,10 @@ def search_with_retry(query, max_results=8, max_retries=3):
                     return results
 
         except Exception as e:
-            last_error = str(e)
+            error_str = str(e).lower()
+            # Rate limit durumunda daha uzun bekle
+            if "ratelimit" in error_str or "429" in error_str:
+                time.sleep(5)
             if attempt < max_retries - 1:
                 continue
 
@@ -712,13 +761,22 @@ with st.sidebar:
     with col1:
         if st.button("🗑️ Temizle"):
             st.session_state.products = []
+            st.session_state.shown_images = set()
+            st.session_state.used_queries = set()
             st.rerun()
     with col2:
         if st.button("🔄 Sıfırla"):
             save_json(LIKES_FILE, [])
             save_json(DISLIKES_FILE, [])
             save_learned_keywords({"positive": {}, "negative": {}, "patterns": []})
+            st.session_state.shown_images = set()
+            st.session_state.used_queries = set()
             st.rerun()
+
+    # Gösterilen ürün sayısı
+    shown_count = len(st.session_state.get('shown_images', set()))
+    if shown_count > 0:
+        st.caption(f"📊 {shown_count} farklı ürün gösterildi")
 
 # --- ANA SAYFA ---
 st.markdown("""
@@ -872,7 +930,7 @@ with st.expander("❤️ Beğendiğin Ürünler"):
 st.markdown("---")
 st.markdown("""
 <div style="text-align:center; color:#555; padding:20px;">
-    <p>🎁 Sürpriz Kutu Avcısı v8.0</p>
-    <p style="font-size:12px;">24 Farklı Tür • Multi-Platform • Öğrenen Sistem</p>
+    <p>🎁 Sürpriz Kutu Avcısı v8.1</p>
+    <p style="font-size:12px;">24 Farklı Tür • Tekrarsız Sonuçlar • Çeşitlilik Garantisi</p>
 </div>
 """, unsafe_allow_html=True)
