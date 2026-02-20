@@ -1,139 +1,879 @@
 import streamlit as st
-import google.generativeai as genai
 from duckduckgo_search import DDGS
-from translate import Translator
 import random
 import time
 import urllib.parse
+import json
+import os
+from datetime import datetime
+import re
 
-# --- 1. AYARLAR ---
-GOOGLE_API_KEY = "AIzaSyBpfia2i-dayH5UE_4DvGBAHvDyTLTtru0"
-genai.configure(api_key=GOOGLE_API_KEY)
-translator = Translator(to_lang="zh")
+# --- SAYFA AYARLARI ---
+st.set_page_config(
+    page_title="Sürpriz Kutu Avcısı",
+    page_icon="🎁",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.set_page_config(page_title="Zırhlı Trend Avcısı", page_icon="🛡️", layout="wide")
+# --- VERİTABANI DOSYALARI ---
+LIKES_FILE = "liked_products.json"
+DISLIKES_FILE = "disliked_products.json"
+LEARNED_KEYWORDS_FILE = "learned_keywords.json"
 
-# --- 2. TASARIM (HATASIZ GÖRÜNÜM) ---
+# --- SESSION STATE ---
+if 'products' not in st.session_state:
+    st.session_state.products = []
+if 'search_count' not in st.session_state:
+    st.session_state.search_count = 0
+if 'shown_images' not in st.session_state:
+    st.session_state.shown_images = set()
+if 'used_queries' not in st.session_state:
+    st.session_state.used_queries = set()
+
+# --- VERİTABANI FONKSİYONLARI ---
+def load_json(filename):
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except:
+        pass
+    return []
+
+def save_json(filename, data):
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+def load_learned_keywords():
+    data = load_json(LEARNED_KEYWORDS_FILE)
+    if isinstance(data, dict):
+        return data
+    return {"positive": {}, "negative": {}, "patterns": []}
+
+def save_learned_keywords(data):
+    save_json(LEARNED_KEYWORDS_FILE, data)
+
+# --- BEĞENİ SİSTEMİ ---
+def like_product(product):
+    likes = load_json(LIKES_FILE)
+    product['liked_at'] = datetime.now().isoformat()
+    likes.append(product)
+    save_json(LIKES_FILE, likes)
+    learn_from_product(product, positive=True)
+    return len(likes)
+
+def dislike_product(product):
+    dislikes = load_json(DISLIKES_FILE)
+    product['disliked_at'] = datetime.now().isoformat()
+    dislikes.append(product)
+    save_json(DISLIKES_FILE, dislikes)
+    learn_from_product(product, positive=False)
+    return len(dislikes)
+
+def learn_from_product(product, positive=True):
+    keywords = load_learned_keywords()
+    title = product.get('title', '').lower()
+    words = re.findall(r'\b[a-zA-Z\u4e00-\u9fff]{2,}\b', title)
+    stop_words = {'the', 'and', 'for', 'with', 'new', 'hot', 'sale', 'free', 'shipping',
+                  'pcs', 'set', 'buy', 'get', 'off', 'best', 'top', 'good', 'great',
+                  'item', 'product', 'quality', 'high', 'low', 'price', 'cheap', 'from'}
+    target = "positive" if positive else "negative"
+    for word in words:
+        if word.lower() not in stop_words and len(word) > 2:
+            if word not in keywords[target]:
+                keywords[target][word] = 0
+            keywords[target][word] += 1
+    if product.get('category') and positive:
+        if product['category'] not in keywords['patterns']:
+            keywords['patterns'].append(product['category'])
+    save_learned_keywords(keywords)
+
+def get_smart_search_terms():
+    keywords = load_learned_keywords()
+    positive = keywords.get('positive', {})
+    negative = keywords.get('negative', {})
+    scores = {}
+    for word, count in positive.items():
+        scores[word] = count
+    for word, count in negative.items():
+        if word in scores:
+            scores[word] -= count * 2
+        else:
+            scores[word] = -count * 2
+    sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [w for w, s in sorted_words[:10] if s > 0]
+
+def get_preference_stats():
+    likes = load_json(LIKES_FILE)
+    dislikes = load_json(DISLIKES_FILE)
+    keywords = load_learned_keywords()
+    top_positive = sorted(keywords.get('positive', {}).items(), key=lambda x: x[1], reverse=True)[:5]
+    top_negative = sorted(keywords.get('negative', {}).items(), key=lambda x: x[1], reverse=True)[:5]
+    return {
+        'total_likes': len(likes),
+        'total_dislikes': len(dislikes),
+        'top_positive': top_positive,
+        'top_negative': top_negative,
+        'patterns': keywords.get('patterns', [])[:5]
+    }
+
+# --- FARKLI SÜRPRİZ KUTU KATEGORİLERİ ---
+INTERESTING_CATEGORIES = {
+    "🎰 Gashapon & Kapsül Makineleri": {
+        "searches": [
+            "mini gashapon machine toy",
+            "capsule vending machine desktop",
+            "gachapon dispenser small",
+            "egg twisting machine toy",
+            "capsule toy machine mini",
+            "gacha machine collectible",
+            "japanese capsule machine small",
+            "twist egg dispenser toy",
+            "coin gashapon machine mini",
+            "desktop gachapon dispenser"
+        ]
+    },
+
+    "🥚 Sürpriz Yumurta & Egg": {
+        "searches": [
+            "surprise egg toy collectible",
+            "mystery egg figure inside",
+            "hatch egg surprise toy",
+            "growing egg dinosaur",
+            "magic egg water grow",
+            "kinder style surprise egg",
+            "giant surprise egg toy",
+            "hatching egg interactive",
+            "egg pod surprise figure",
+            "crack egg mystery toy"
+        ]
+    },
+
+    "🔮 Sürpriz Top & Ball": {
+        "searches": [
+            "LOL surprise ball toy",
+            "mystery ball collectible",
+            "surprise ball layers unwrap",
+            "orb surprise toy figure",
+            "sphere mystery collectible",
+            "ball surprise unboxing toy",
+            "round mystery capsule",
+            "globe surprise figure",
+            "layered ball surprise",
+            "pop ball mystery toy"
+        ]
+    },
+
+    "🎪 Mini Claw & Vinç Makinesi": {
+        "searches": [
+            "mini claw machine toy",
+            "crane game machine small",
+            "candy grabber desktop",
+            "claw machine home mini",
+            "grabber machine toy small",
+            "arcade claw mini home",
+            "prize claw machine desktop",
+            "UFO catcher mini toy",
+            "crane catcher small machine",
+            "claw grab toy dispenser"
+        ]
+    },
+
+    "📦 Katmanlı Unboxing (LOL Style)": {
+        "searches": [
+            "layered surprise unboxing",
+            "multi layer mystery box",
+            "unwrap surprise layers toy",
+            "peel reveal surprise",
+            "layer by layer surprise",
+            "unboxing layers collectible",
+            "wrapped layers mystery",
+            "surprise layers fashion doll",
+            "multiple unwrap surprise",
+            "reveal layer toy"
+        ]
+    },
+
+    "🎁 Pop-Up & Patlayan Kutular": {
+        "searches": [
+            "explosion surprise box gift",
+            "pop up gift box DIY",
+            "jumping surprise box",
+            "spring loaded gift box",
+            "exploding photo box",
+            "pop out surprise cube",
+            "jack in box style toy",
+            "spring surprise box toy",
+            "popping gift box mechanism",
+            "surprise explosion cube"
+        ]
+    },
+
+    "🗝️ Puzzle & Gizli Kutular": {
+        "searches": [
+            "puzzle box secret compartment",
+            "mystery puzzle box wooden",
+            "secret box mechanism",
+            "trick box hidden",
+            "japanese puzzle box",
+            "brain teaser box secret",
+            "hidden compartment box",
+            "cryptex puzzle cylinder",
+            "escape room puzzle box",
+            "lock box puzzle toy"
+        ]
+    },
+
+    "🛒 Mini Brands & Minyatür": {
+        "searches": [
+            "mini brands surprise capsule",
+            "miniature real brands toy",
+            "tiny replica brand products",
+            "mini grocery surprise",
+            "small brands collectible",
+            "miniature shopping surprise",
+            "real littles mini",
+            "tiny brands capsule",
+            "mini products surprise",
+            "shopkins real littles"
+        ]
+    },
+
+    "🏪 Mini Otomat & Vending": {
+        "searches": [
+            "mini vending machine toy",
+            "desktop vending machine",
+            "small dispenser machine toy",
+            "candy vending mini",
+            "toy vending machine home",
+            "snack dispenser mini toy",
+            "coin operated toy dispenser",
+            "mini slot machine toy",
+            "capsule vending desktop",
+            "automatic dispenser toy small"
+        ]
+    },
+
+    "🎭 Blind Bag & Poşet Sürpriz": {
+        "searches": [
+            "blind bag figure collectible",
+            "mystery bag toy surprise",
+            "foil bag surprise figure",
+            "sealed bag mystery",
+            "grab bag surprise toy",
+            "lucky bag mystery figure",
+            "random bag collectible",
+            "surprise pouch figure",
+            "mystery pack blind",
+            "secret bag toy figure"
+        ]
+    },
+
+    "🥫 Sürpriz Kutu & Tin Can": {
+        "searches": [
+            "mystery tin surprise toy",
+            "surprise can collectible",
+            "tin container mystery figure",
+            "metal box surprise toy",
+            "can surprise blind",
+            "treasure tin mystery",
+            "collectible tin surprise",
+            "metal container mystery toy",
+            "surprise tin box figure",
+            "cylinder mystery container"
+        ]
+    },
+
+    "💧 Suyla Açılan Sürpriz": {
+        "searches": [
+            "water reveal surprise toy",
+            "grow in water surprise",
+            "water activated mystery",
+            "dissolve reveal surprise",
+            "fizz ball surprise toy",
+            "bath bomb surprise inside",
+            "water growing egg",
+            "fizzing surprise ball",
+            "melt reveal mystery",
+            "dissolving surprise egg"
+        ]
+    },
+
+    "🔥 Renk Değiştiren Sürpriz": {
+        "searches": [
+            "color change surprise toy",
+            "heat reveal mystery",
+            "temperature change figure",
+            "color reveal doll water",
+            "magic color change toy",
+            "UV light reveal surprise",
+            "sun activated color toy",
+            "thermal color change figure",
+            "color changing mystery",
+            "reveal color surprise toy"
+        ]
+    },
+
+    "🎨 DIY & Montaj Sürpriz": {
+        "searches": [
+            "DIY surprise figure kit",
+            "build your own mystery",
+            "assembly surprise toy",
+            "construct mystery figure",
+            "make your own blind box",
+            "DIY capsule toy kit",
+            "assemble surprise collectible",
+            "building mystery figure",
+            "create your surprise toy",
+            "craft mystery box kit"
+        ]
+    },
+
+    "🍬 Şeker & Yiyecek Temalı": {
+        "searches": [
+            "candy surprise container",
+            "food shaped mystery toy",
+            "sweet surprise dispenser",
+            "snack box surprise toy",
+            "candy machine surprise",
+            "food surprise blind",
+            "gummy surprise toy",
+            "dessert mystery figure",
+            "candy dispenser mystery",
+            "food theme blind box"
+        ]
+    },
+
+    "🎠 Nostaljik & Retro Sürpriz": {
+        "searches": [
+            "retro surprise toy vintage",
+            "classic mystery toy style",
+            "vintage capsule toy",
+            "old style surprise box",
+            "nostalgic mystery figure",
+            "throwback blind box",
+            "retro gachapon style",
+            "vintage vending toy",
+            "classic surprise egg style",
+            "80s 90s style mystery"
+        ]
+    },
+
+    "🎪 Karnaval & Festival Oyunları": {
+        "searches": [
+            "carnival game prize toy",
+            "festival surprise game",
+            "fair game mini toy",
+            "lucky draw machine mini",
+            "spin wheel prize toy",
+            "lottery machine toy small",
+            "fortune wheel mini",
+            "prize game desktop toy",
+            "carnival claw mini",
+            "lucky spin surprise toy"
+        ]
+    },
+
+    "🌟 Premium & Koleksiyon": {
+        "searches": [
+            "premium blind box figure",
+            "limited edition mystery",
+            "rare collectible surprise",
+            "designer mystery figure",
+            "luxury blind box art toy",
+            "exclusive capsule collectible",
+            "special edition mystery box",
+            "high end blind box",
+            "collector mystery figure",
+            "rare chase variant blind"
+        ]
+    },
+
+    "🐾 Hayvan & Pet Temalı": {
+        "searches": [
+            "animal surprise blind box",
+            "pet figure mystery",
+            "zoo animal capsule toy",
+            "cute animal blind bag",
+            "wildlife surprise figure",
+            "farm animal mystery",
+            "sea creature blind box",
+            "insect surprise capsule",
+            "dinosaur mystery egg",
+            "cat dog surprise figure"
+        ]
+    },
+
+    "🌸 Kawaii & Anime Sürpriz": {
+        "searches": [
+            "anime blind box figure",
+            "kawaii mystery capsule",
+            "sanrio surprise figure",
+            "chibi character blind box",
+            "japanese anime mystery",
+            "cute character gashapon",
+            "manga style blind box",
+            "otaku mystery figure",
+            "anime gashapon japan",
+            "kawaii character capsule"
+        ]
+    },
+
+    "🦸 Karakter & Lisanslı": {
+        "searches": [
+            "disney mystery mini figure",
+            "marvel surprise blind bag",
+            "pokemon mystery box figure",
+            "harry potter mystery mini",
+            "star wars blind box",
+            "nintendo surprise figure",
+            "pixar mystery mini",
+            "dc comics blind bag",
+            "cartoon network mystery",
+            "dreamworks surprise capsule"
+        ]
+    },
+
+    "🎲 Rastgele & Şans Oyunu": {
+        "searches": [
+            "lucky box random toy",
+            "fortune box surprise",
+            "chance box mystery",
+            "random selection box",
+            "luck based surprise",
+            "gamble box toy figure",
+            "lottery style mystery",
+            "random mystery selection",
+            "lucky draw surprise box",
+            "chance surprise capsule"
+        ]
+    },
+
+    "🔬 Bilim & Eğitici Sürpriz": {
+        "searches": [
+            "science surprise dig kit",
+            "excavation mystery toy",
+            "fossil dig surprise",
+            "gem dig mystery box",
+            "archaeology surprise kit",
+            "crystal grow surprise",
+            "STEM mystery box",
+            "educational surprise toy",
+            "discovery dig kit",
+            "mineral dig surprise"
+        ]
+    },
+
+    "🏠 Mobilya & Minyatür Dünya": {
+        "searches": [
+            "miniature furniture blind box",
+            "tiny room surprise",
+            "dollhouse mystery capsule",
+            "mini scene surprise box",
+            "room diorama blind",
+            "furniture miniature mystery",
+            "small world surprise",
+            "micro room blind box",
+            "house miniature capsule",
+            "decor mini surprise"
+        ]
+    }
+}
+
+# --- ÇEŞİTLİLİK KELİMELERİ ---
+VARIATION_WORDS = [
+    "2024", "2025", "new", "latest", "trending", "popular", "hot",
+    "cute", "kawaii", "unique", "creative", "novel", "special",
+    "mini", "small", "desktop", "portable", "pocket",
+    "collectible", "limited", "exclusive", "rare",
+    "toy", "figure", "model", "decoration"
+]
+
+# --- ARAMA FONKSİYONLARI ---
+def multi_platform_search(search_terms, max_results=12, max_retries=2):
+    """Basit ve hızlı arama"""
+    all_results = []
+    shown_images = st.session_state.get('shown_images', set())
+
+    # Terimleri karıştır
+    shuffled_terms = search_terms.copy()
+    random.shuffle(shuffled_terms)
+
+    # 3-4 terim seç
+    selected_terms = shuffled_terms[:4]
+
+    for term in selected_terms:
+        # Basit sorgu - site: olmadan
+        variation = random.choice(VARIATION_WORDS)
+        query = f"{term} {variation}"
+
+        results = search_with_retry(query, max_results=8, max_retries=max_retries)
+
+        for r in results:
+            r['platform'] = 'web'
+            r['search_term'] = term
+
+        all_results.extend(results)
+        time.sleep(0.2)
+
+    # Benzersiz sonuçları filtrele
+    unique_results = []
+    random.shuffle(all_results)
+
+    for r in all_results:
+        image_url = r.get('image', '')
+        if image_url and image_url not in shown_images:
+            already_in_results = any(existing['image'] == image_url for existing in unique_results)
+            if not already_in_results:
+                unique_results.append(r)
+                st.session_state.shown_images.add(image_url)
+                if len(unique_results) >= max_results:
+                    break
+
+    return unique_results
+
+def search_with_retry(query, max_results=8, max_retries=2):
+    """Hızlı arama - kısa timeout"""
+    results = []
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                time.sleep(1)
+
+            ddgs = DDGS(timeout=10)
+            images = list(ddgs.images(
+                query,
+                max_results=max_results + 5,
+                safesearch='off'
+            ))
+
+            if images:
+                random.shuffle(images)
+                for img in images[:max_results]:
+                    image_url = img.get("image", "")
+                    if image_url and len(image_url) > 10:
+                        results.append({
+                            "id": hash(image_url + str(random.random())) % 1000000,
+                            "title": img.get("title", "Ürün"),
+                            "image": image_url,
+                            "url": img.get("url", ""),
+                            "source": img.get("source", ""),
+                            "query": query
+                        })
+                if results:
+                    return results
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                continue
+
+    return results
+
+def generate_platform_links(query):
+    """Platform linkleri oluştur"""
+    en = urllib.parse.quote(query)
+
+    return {
+        "aliexpress": f"https://www.aliexpress.com/wholesale?SearchText={en}",
+        "alibaba": f"https://www.alibaba.com/trade/search?SearchText={en}",
+        "amazon": f"https://www.amazon.com/s?k={en}",
+        "ebay": f"https://www.ebay.com/sch/i.html?_nkw={en}",
+        "etsy": f"https://www.etsy.com/search?q={en}",
+        "dhgate": f"https://www.dhgate.com/wholesale/search.do?searchkey={en}"
+    }
+
+# --- TASARIM ---
 st.markdown("""
 <style>
-    .stApp { background-color: #000000; color: #fff; }
-    
-    /* Ürün Kartı */
-    .trend-card {
-        background-color: #111;
-        border: 1px solid #333;
+    .stApp { background: #0a0a0f; }
+
+    .header-box {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 2px solid #00d4ff;
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .product-card {
+        background: linear-gradient(145deg, #1a1a2e, #16213e);
+        border: 1px solid #0f3460;
+        border-radius: 16px;
+        padding: 0;
+        margin: 10px 0;
+        overflow: hidden;
+        transition: all 0.3s;
+    }
+    .product-card:hover {
+        border-color: #00d4ff;
+        transform: translateY(-5px);
+    }
+
+    .platform-tag {
+        display: inline-block;
+        background: #00d4ff;
+        color: black;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
+        margin: 5px 0;
+    }
+
+    .stats-box {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid #00d4ff;
         border-radius: 12px;
         padding: 15px;
-        margin-bottom: 20px;
-        text-align: center;
+        margin: 10px 0;
     }
-    .trend-card img {
-        border-radius: 8px;
-        max-height: 200px;
-        object-fit: cover;
+
+    .category-btn {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 25px;
+        color: white;
+        font-weight: 600;
     }
-    
-    /* B Planı Kartı (Resim Yüklenemezse Çıkar) */
-    .backup-card {
-        background: linear-gradient(135deg, #1e1e1e, #2a2a2a);
-        border: 2px dashed #555;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin-bottom: 20px;
+
+    .learned-tag {
+        display: inline-block;
+        background: #00b894;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        margin: 3px;
+        font-size: 12px;
     }
-    
-    .tag { background-color: #E60023; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-    
-    /* Butonlar */
-    .big-btn { width: 100%; padding: 18px; font-size: 22px; background: linear-gradient(90deg, #FF512F, #DD2476); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; }
-    .link-btn { display:inline-block; background-color:#00e5ff; color:black; padding:8px 15px; border-radius:6px; text-decoration:none; font-weight:bold; margin-top:10px; }
+    .negative-tag {
+        display: inline-block;
+        background: #e94560;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        margin: 3px;
+        font-size: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. RULET KAVANOZU (SINIRSIZ YENİ FİKİR) ---
-KONSEPTLER = [
-    "Labubu Vinyl Face Plush", "Crybaby Powerpuff Girls Popmart", "Skullpanda Image Of Reality",
-    "Dimoo Dating Series", "Hirono Reshape Series", "Azura Animal Fighting Match",
-    "Nyota Fluffy Life Series", "Zsiga Walking Into The Forest", "Molly Imaginary Wandering",
-    "Sweet Bean Supermarket", "Pucky Elf Forest", "Hacipupu The Kindergarten",
-    "Pino Jelly How Are You", "Satyr Rory Cuddly Toy", "Bunny Winter Series",
-    "Harry Potter Mystery Minis", "Sanrio Characters Latte Baby", "Kuromi Poker Kingdom",
-    "Crayon Shin-chan Daily Life", "Doraemon Future Department Store"
-]
+# --- SIDEBAR ---
+with st.sidebar:
+    st.markdown("## 🎯 Arama Ayarları")
 
-# --- 4. GÜVENLİ ARAMA MOTORU ---
+    # Kategori seçimi
+    selected_category = st.selectbox(
+        "📂 Kategori Seç",
+        options=list(INTERESTING_CATEGORIES.keys())
+    )
 
-def trend_avla():
-    # 1. Rastgele Konu Seç
-    konu = random.choice(KONSEPTLER)
-    
-    # 2. Link Hazırla (Resim gelmese bile bu link çalışır)
-    google_link = f"https://www.google.com/search?q={urllib.parse.quote(konu + ' blind box viral')}&tbm=isch"
-    
-    # 3. Resim Çekmeye Çalış (Riskli Kısım)
-    bulunan_resimler = []
-    hata_var = False
-    
-    try:
-        with DDGS() as ddgs:
-            # Sadece 3 saniye dene, olmazsa zorlama
-            sorgu = f"{konu} blind box viral unboxing"
-            sonuclar = list(ddgs.images(sorgu, max_results=3))
-            if sonuclar:
-                bulunan_resimler = sonuclar
-            else:
-                hata_var = True
-    except:
-        hata_var = True # Hata alırsa B Planına geç
-        
-    return {
-        "konu": konu,
-        "resimler": bulunan_resimler,
-        "hata": hata_var,
-        "link": google_link
-    }
+    st.markdown("---")
 
-# --- 5. ARAYÜZ ---
+    # İstatistikler
+    stats = get_preference_stats()
+    st.markdown(f"""
+    <div class="stats-box">
+        <h4 style="color:#00d4ff; margin:0;">📊 Öğrenme Durumu</h4>
+        <p style="color:#ccc; margin:10px 0;">
+            ❤️ Beğenilen: <strong>{stats['total_likes']}</strong><br>
+            👎 Beğenilmeyen: <strong>{stats['total_dislikes']}</strong>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.title("🛡️ ZIRHLI TREND AVCISI")
-st.caption("Engel tanımayan mod devrede.")
+    if stats['top_positive']:
+        st.markdown("**✅ Sevdiğin:**")
+        for word, count in stats['top_positive']:
+            st.markdown(f'<span class="learned-tag">{word}</span>', unsafe_allow_html=True)
 
-if st.button("ŞANSINI DENE VE ARA 🎲", type="primary"):
-    
-    with st.spinner("İstihbarat uydusuna bağlanılıyor..."):
-        time.sleep(1) # Ban yememek için nazik bekleme
-        
-        veri = trend_avla()
-        konu = veri['konu']
-        
-        st.success(f"🎯 Hedef Kilitlendi: **{konu}**")
-        
-        # EĞER RESİM BULUNDUYSA (A Planı)
-        if not veri['hata'] and veri['resimler']:
-            cols = st.columns(3)
-            for i, resim in enumerate(veri['resimler']):
-                with cols[i % 3]:
-                    st.markdown(f"""
-                    <div class="trend-card">
-                        <img src="{resim['image']}" width="100%">
-                        <h4 style="margin-top:10px; font-size:14px;">{resim['title'][:30]}...</h4>
-                        <a href="{resim['image']}" target="_blank" class="link-btn">Resmi Büyüt 🔍</a>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-        # EĞER RESİM BULUNAMADIYSA / ENGELLENDİYSE (B Planı - Asla Boş Dönmez)
+    if stats['top_negative']:
+        st.markdown("**❌ Sevmediğin:**")
+        for word, count in stats['top_negative']:
+            st.markdown(f'<span class="negative-tag">{word}</span>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Temizle"):
+            st.session_state.products = []
+            st.session_state.shown_images = set()
+            st.session_state.used_queries = set()
+            st.rerun()
+    with col2:
+        if st.button("🔄 Sıfırla"):
+            save_json(LIKES_FILE, [])
+            save_json(DISLIKES_FILE, [])
+            save_learned_keywords({"positive": {}, "negative": {}, "patterns": []})
+            st.session_state.shown_images = set()
+            st.session_state.used_queries = set()
+            st.rerun()
+
+    # Gösterilen ürün sayısı
+    shown_count = len(st.session_state.get('shown_images', set()))
+    if shown_count > 0:
+        st.caption(f"📊 {shown_count} farklı ürün gösterildi")
+
+# --- ANA SAYFA ---
+st.markdown("""
+<div class="header-box">
+    <h1 style="color:#00d4ff; margin:0;">🎁 SÜRPRİZ KUTU AVCISI</h1>
+    <p style="color:#ccc; margin-top:10px;">
+        24 Farklı Sürpriz Kutu Türü • Multi-Platform Arama • Öğrenen Sistem
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# Seçili kategori bilgisi
+st.info(f"🔍 **{selected_category}** kategorisinde {len(INTERESTING_CATEGORIES[selected_category]['searches'])} farklı arama terimi ile taranacak")
+
+# --- ARAMA BUTONLARI ---
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    search_clicked = st.button("🚀 ÜRÜN ARA", type="primary", use_container_width=True)
+
+if search_clicked:
+    with st.spinner("🔍 Platformlar taranıyor..."):
+        category_data = INTERESTING_CATEGORIES[selected_category]
+        results = multi_platform_search(category_data['searches'], max_results=12)
+
+        for r in results:
+            r['category'] = selected_category
+
+        st.session_state.products = results
+        st.session_state.search_count += 1
+
+        if results:
+            st.success(f"✅ {len(results)} ilginç ürün bulundu!")
         else:
-            st.warning("⚠️ Uydu Görüntüsü Alınamadı (İnternet Engeli), Ama Koordinatlar Geldi!")
-            st.markdown(f"""
-            <div class="backup-card">
-                <h3>🚫 Görsel Yüklenemedi</h3>
-                <p>DuckDuckGo şu an yoğun ama trendi bulduk.</p>
-                <h2 style="color:#00e5ff;">{konu}</h2>
-                <br>
-                <a href="{veri['link']}" target="_blank" class="big-btn" style="text-decoration:none; font-size:18px;">
-                    🚀 Tıkla ve Google'da Gör
-                </a>
-                <p style="margin-top:10px; font-size:12px; color:#888;">Bu buton seni direkt bu ürünün görsellerine götürür.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.warning("⚠️ Sonuç bulunamadı. Tekrar deneyin.")
+
+# Hızlı platform linkleri
+if st.session_state.products:
+    sample_query = random.choice(INTERESTING_CATEGORIES[selected_category]['searches'])
+    links = generate_platform_links(sample_query)
+
+    st.markdown("### 🌐 Direkt Platform Araması:")
+    link_cols = st.columns(6)
+    platforms_display = [
+        ("AliExpress", links["aliexpress"], "#ff4747"),
+        ("Alibaba", links["alibaba"], "#ff6a00"),
+        ("Amazon", links["amazon"], "#ff9900"),
+        ("eBay", links["ebay"], "#0064d2"),
+        ("Etsy", links["etsy"], "#f56400"),
+        ("DHgate", links["dhgate"], "#ff5722")
+    ]
+
+    for i, (name, url, color) in enumerate(platforms_display):
+        with link_cols[i]:
+            st.markdown(f'<a href="{url}" target="_blank" style="background:{color}; color:white; padding:8px 15px; border-radius:20px; text-decoration:none; font-weight:bold; font-size:12px;">{name}</a>', unsafe_allow_html=True)
+
+# --- ÜRÜN KARTLARI ---
+if st.session_state.products:
+    st.markdown("---")
+    st.markdown(f"### 🎁 Bulunan Ürünler ({len(st.session_state.products)})")
+    st.caption("Beğendiğine ❤️, beğenmediğine 👎 tıkla - sistem öğrenecek!")
+
+    cols = st.columns(3)
+
+    for idx, product in enumerate(st.session_state.products):
+        with cols[idx % 3]:
+            # Platform etiketi
+            platform = product.get('platform', 'web')
+            st.markdown(f'<span class="platform-tag">{platform.upper()}</span>', unsafe_allow_html=True)
+
+            # Görsel
+            if product.get('image'):
+                try:
+                    st.image(product['image'], use_container_width=True)
+                except:
+                    st.markdown("🖼️ Görsel yüklenemedi")
+
+            # Başlık
+            title = product.get('title', '')[:80]
+            st.markdown(f"**{title}**" if title else "**Ürün**")
+
+            # Butonlar
+            btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+            with btn_col1:
+                if st.button("❤️", key=f"like_{idx}_{product.get('id', idx)}"):
+                    count = like_product(product)
+                    st.toast(f"Beğenildi! ({count})")
+                    st.rerun()
+
+            with btn_col2:
+                if st.button("👎", key=f"dislike_{idx}_{product.get('id', idx)}"):
+                    count = dislike_product(product)
+                    st.toast(f"Kaydedildi!")
+                    st.rerun()
+
+            with btn_col3:
+                if product.get('url'):
+                    st.markdown(f'<a href="{product["url"]}" target="_blank">🔗</a>', unsafe_allow_html=True)
+
+            st.markdown("---")
+
+    # Daha fazla yükle
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 DAHA FAZLA ÜRÜN GETİR", use_container_width=True):
+        with st.spinner("Yeni ürünler aranıyor..."):
+            time.sleep(1)
+            category_data = INTERESTING_CATEGORIES[selected_category]
+            new_results = multi_platform_search(category_data['searches'], max_results=9)
+
+            if new_results:
+                for r in new_results:
+                    r['category'] = selected_category
+                st.session_state.products.extend(new_results)
+                st.success(f"✅ {len(new_results)} yeni ürün eklendi!")
+            st.rerun()
+
+else:
+    st.markdown("""
+    <div style="text-align:center; padding:50px; color:#888;">
+        <h2>🎯 Nasıl Çalışır?</h2>
+        <p style="font-size:18px;">1. Kategori seç</p>
+        <p style="font-size:18px;">2. "ÜRÜN ARA" butonuna tıkla</p>
+        <p style="font-size:18px;">3. Birden fazla platform aynı anda taranır</p>
+        <p style="font-size:18px;">4. Beğendiklerine ❤️ tıkla, sistem öğrensin!</p>
+        <br>
+        <p style="color:#00d4ff; font-size:16px;">
+            🚀 AliExpress, Alibaba, Amazon, eBay, Etsy, DHgate<br>
+            hepsi tek seferde taranıyor!
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- BEĞENİLENLER ---
+st.markdown("---")
+with st.expander("❤️ Beğendiğin Ürünler"):
+    liked = load_json(LIKES_FILE)
+    if liked:
+        like_cols = st.columns(4)
+        for i, item in enumerate(liked[-12:]):
+            with like_cols[i % 4]:
+                if item.get('image'):
+                    try:
+                        st.image(item['image'], use_container_width=True)
+                    except:
+                        pass
+                st.caption(item.get('title', '')[:40])
+    else:
+        st.info("Henüz beğenilen ürün yok.")
+
+# --- FOOTER ---
+st.markdown("---")
+st.markdown("""
+<div style="text-align:center; color:#555; padding:20px;">
+    <p>🎁 Sürpriz Kutu Avcısı v8.2</p>
+    <p style="font-size:12px;">24 Farklı Tür • Hızlı Arama • Çeşitlilik Garantisi</p>
+</div>
+""", unsafe_allow_html=True)
